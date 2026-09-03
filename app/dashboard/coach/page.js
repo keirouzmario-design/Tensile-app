@@ -57,32 +57,50 @@ export default async function CoachDashboard() {
                   style={{
                     padding: "14px 20px",
                     borderTop: i === 0 ? "none" : "1px solid var(--line)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{l.profiles?.full_name}</div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        marginTop: 2,
-                        color:
-                          status === "active"
-                            ? "var(--moss)"
-                            : status === "expired"
-                            ? "var(--rust)"
-                            : "var(--steel)",
-                      }}
-                    >
-                      {status === "active" && `Active until ${l.package_end_date}`}
-                      {status === "expired" && `Expired ${l.package_end_date}`}
-                      {status === "pending" && "Pending — no payment yet"}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{l.profiles?.full_name}</div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          marginTop: 2,
+                          color:
+                            status === "active"
+                              ? "var(--moss)"
+                              : status === "expired"
+                              ? "var(--rust)"
+                              : "var(--steel)",
+                        }}
+                      >
+                        {status === "active" && `Active until ${l.package_end_date}`}
+                        {status === "expired" && `Expired ${l.package_end_date}`}
+                        {status === "pending" && "Pending — no payment yet"}
+                      </div>
                     </div>
+                    <ActivateButton coachId={user.id} clientId={l.client_id} days={30} />
                   </div>
-                  <ActivateButton coachId={user.id} clientId={l.client_id} days={30} />
+                  <a
+                    href={`/dashboard/coach/client/${l.client_id}`}
+                    style={{
+                      display: "inline-block",
+                      marginTop: 10,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--moss-deep)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    View workout plan →
+                  </a>
                 </div>
               );
             })}
