@@ -23,7 +23,7 @@ export default async function ClientWorkoutPage({ params }) {
 
   const { data: clientProfile } = await supabase
     .from("profiles")
-    .select("full_name")
+    .select("full_name, injuries")
     .eq("id", clientId)
     .single();
 
@@ -49,9 +49,24 @@ export default async function ClientWorkoutPage({ params }) {
         <a href="/dashboard/coach" className="muted" style={{ textDecoration: "none" }}>
           ← Back to clients
         </a>
-        <h1 style={{ fontSize: 22, marginTop: 8, marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, marginTop: 8, marginBottom: 12 }}>
           {clientProfile?.full_name}&apos;s Workout Plan
         </h1>
+
+        {clientProfile?.injuries && (
+          <div
+            style={{
+              marginBottom: 20,
+              fontSize: 13,
+              color: "var(--amber)",
+              background: "#F3E9DC",
+              borderRadius: 8,
+              padding: "10px 14px",
+            }}
+          >
+            Injury note: {clientProfile.injuries}
+          </div>
+        )}
 
         <WorkoutEditor
           clientId={clientId}
