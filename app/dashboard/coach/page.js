@@ -78,32 +78,23 @@ export default async function CoachDashboard() {
                     borderTop: i === 0 ? "none" : "1px solid var(--line)",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 12,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{l.profiles?.full_name}</div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          marginTop: 2,
-                          color:
-                            status === "active"
-                              ? "var(--moss)"
-                              : status === "expired"
-                              ? "var(--rust)"
-                              : "var(--steel)",
-                        }}
-                      >
-                        {status === "active" && `Active until ${l.package_end_date}`}
-                        {status === "expired" && `Expired ${l.package_end_date}`}
-                        {status === "pending" && "Pending — no package yet"}
-                      </div>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{l.profiles?.full_name}</div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        marginTop: 2,
+                        color:
+                          status === "active"
+                            ? "var(--moss)"
+                            : status === "expired"
+                            ? "var(--rust)"
+                            : "var(--steel)",
+                      }}
+                    >
+                      {status === "active" && `Active until ${l.package_end_date}`}
+                      {status === "expired" && `Expired ${l.package_end_date}`}
+                      {status === "pending" && "Pending — no package yet"}
                     </div>
                   </div>
 
@@ -122,7 +113,7 @@ export default async function CoachDashboard() {
                     </div>
                   )}
 
-                  {pendingRequest && status !== "active" && (
+                  {pendingRequest && (
                     <div
                       style={{
                         marginTop: 10,
@@ -142,17 +133,6 @@ export default async function CoachDashboard() {
                         clientId={l.client_id}
                         daysPerWeek={pendingRequest.days_per_week}
                         hasExistingPlan={hasExistingPlan}
-                      />
-                    </div>
-                  )}
-
-                  {status === "active" && (
-                    <div style={{ marginTop: 10 }}>
-                      <ConfirmPackageButton
-                        coachId={user.id}
-                        clientId={l.client_id}
-                        daysPerWeek={pendingRequest?.days_per_week}
-                        hasExistingPlan={true}
                       />
                     </div>
                   )}
