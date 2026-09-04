@@ -46,13 +46,16 @@ export default function ConfirmPackageButton({ coachId, clientId, daysPerWeek, h
   async function handleConfirm() {
     setLoading(true);
 
+    const today = new Date();
+    const todayFormatted = today.toISOString().split("T")[0];
+
     const newEndDate = new Date();
     newEndDate.setDate(newEndDate.getDate() + 30);
-    const formatted = newEndDate.toISOString().split("T")[0];
+    const endFormatted = newEndDate.toISOString().split("T")[0];
 
     await supabase
       .from("coach_client_links")
-      .update({ package_end_date: formatted })
+      .update({ package_end_date: endFormatted, package_start_date: todayFormatted })
       .eq("coach_id", coachId)
       .eq("client_id", clientId);
 
