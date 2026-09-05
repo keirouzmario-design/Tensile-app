@@ -22,13 +22,4 @@ const CORE_MUSCLES = {
   jaw_tmj: [], ribs_sternum: ["chest", "core"], collarbone: ["shoulders"],
   hand_fingers: ["forearms"], toes: ["calves"], achilles_tendon: ["calves"],
   groin: ["quads"], tailbone: ["core"], cardiovascular: [], respiratory: [],
-  pregnancy: [], general: [], neurological_balance: [], digestive: [],
-  diabetes_bloodsugar: [],
-};
-
-// The actual joint each body part corresponds to, if any -- used to match
-// against each exercise's joint_stress tags (which joint that movement
-// loads, regardless of which muscle it's officially "for").
-const BODY_PART_JOINT = {
-  shoulders: "shoulder", shoulder_joint: "shoulder", rotator_cuff: "shoulder",
-  collarbone: "shoulder", elbow: "elbow", wrist: "wrist", hand_fingers: "wr
+  pregnancy: [], general: [], ne
