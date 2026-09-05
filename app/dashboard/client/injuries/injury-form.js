@@ -18,6 +18,11 @@ const BODY_PARTS = [
   { value: "glutes", label: "Glutes", category: "muscle" },
   { value: "calves", label: "Calves", category: "muscle" },
   { value: "core", label: "Core / abs", category: "muscle" },
+  { value: "obliques", label: "Obliques", category: "muscle" },
+  { value: "hip_flexors", label: "Hip flexors", category: "muscle" },
+  { value: "adductors", label: "Adductors (inner thigh)", category: "muscle" },
+  { value: "abductors", label: "Abductors (outer hip)", category: "muscle" },
+  { value: "rotator_cuff", label: "Rotator cuff", category: "muscle" },
   { value: "neck", label: "Neck", category: "joint" },
   { value: "upper_back_spine", label: "Upper back / spine (joint)", category: "joint" },
   { value: "lower_back_spine", label: "Lower back / spine (joint)", category: "joint" },
@@ -28,10 +33,21 @@ const BODY_PARTS = [
   { value: "knee", label: "Knee", category: "joint" },
   { value: "ankle", label: "Ankle", category: "joint" },
   { value: "foot", label: "Foot", category: "joint" },
+  { value: "jaw_tmj", label: "Jaw / TMJ", category: "joint" },
+  { value: "ribs_sternum", label: "Ribs / sternum", category: "joint" },
+  { value: "collarbone", label: "Collarbone", category: "joint" },
+  { value: "hand_fingers", label: "Hand / fingers", category: "joint" },
+  { value: "toes", label: "Toes", category: "joint" },
+  { value: "achilles_tendon", label: "Achilles tendon", category: "joint" },
+  { value: "groin", label: "Groin", category: "joint" },
+  { value: "tailbone", label: "Tailbone", category: "joint" },
   { value: "cardiovascular", label: "Heart / cardiovascular", category: "systemic" },
   { value: "respiratory", label: "Breathing / respiratory", category: "systemic" },
   { value: "pregnancy", label: "Pregnancy", category: "systemic" },
   { value: "general", label: "General illness / whole-body recovery", category: "systemic" },
+  { value: "neurological_balance", label: "Neurological / balance issues", category: "systemic" },
+  { value: "digestive", label: "Digestive / GI", category: "systemic" },
+  { value: "diabetes_bloodsugar", label: "Diabetes / blood sugar", category: "systemic" },
 ];
 
 const INJURY_TYPES = {
@@ -68,25 +84,6 @@ const DOCTOR_RECS = [
   "Cleared - no restrictions",
 ];
 
-const MUSCLE_ACTION_MAP = {
-  "Strain/pull": "local_rest",
-  "Soreness (DOMS)": "local_modify",
-  "Chronic tightness/knot": "local_modify",
-  "Tendinitis": "local_modify",
-  "Post-injury recovery": "local_rest",
-  "Other": "local_rest",
-};
-
-const JOINT_ACTION_MAP = {
-  "Sprain (ligament)": "local_rest",
-  "Impingement/pinching pain": "local_rest",
-  "Arthritis/joint pain": "local_modify",
-  "Instability/dislocation history": "local_rest",
-  "Tendinitis/bursitis": "local_modify",
-  "Post-surgery": "local_rest",
-  "Other": "local_rest",
-};
-
 function computeAction(category, injuryType, doctorRec) {
   if (doctorRec === "Complete rest - no training") return "global_rest";
   if (doctorRec === "Avoid this area") return "local_rest";
@@ -94,8 +91,6 @@ function computeAction(category, injuryType, doctorRec) {
   if (doctorRec === "Cleared - no restrictions") return "no_restriction";
 
   if (category === "systemic") return "global_rest";
-  if (category === "muscle") return MUSCLE_ACTION_MAP[injuryType] || "local_rest";
-  if (category === "joint") return JOINT_ACTION_MAP[injuryType] || "local_rest";
   return "local_rest";
 }
 
