@@ -11,12 +11,11 @@ function getAccessStatus(packageEndDate) {
 
 // Maps each reportable body part to the exercise muscle groups it affects.
 // Joints that bear weight while standing (ankle, knee, hip, foot, achilles)
-// are broadened to include the major standing/leg muscles, since e.g. an
-// ankle sprain rules out squats and lunges too, not just calf work.
+// are broadened to include the major standing/leg muscles.
 const INJURY_MUSCLE_MAP = {
   chest: ["chest"],
   back: ["back"],
-  shoulders: ["shoulders"],
+  shoulders: ["shoulders", "chest", "triceps"],
   biceps: ["biceps"],
   triceps: ["triceps"],
   forearms: ["forearms"],
@@ -31,7 +30,7 @@ const INJURY_MUSCLE_MAP = {
   hip_flexors: ["quads", "core"],
   adductors: ["quads", "glutes"],
   abductors: ["glutes"],
-  rotator_cuff: ["shoulders"],
+  rotator_cuff: ["shoulders", "chest", "back", "triceps"],
   neck: ["traps", "shoulders"],
   upper_back_spine: ["back", "lats", "traps"],
   lower_back_spine: ["back", "core"],
@@ -60,6 +59,17 @@ const INJURY_MUSCLE_MAP = {
 };
 
 const SAFER_EQUIPMENT = ["machine", "cable"];
+
+function muscleSet(ex) {
+  return new Set(ex?.muscle_groups || []);
+}
+
+function overlapsAny(muscles, targetSet) {
+  for (const m of muscles) {
+    if (targetSet.has(m)) return true;
+  }
+  return false;
+}
 
 export default async function ClientWorkoutView() {
   const supabase = createClient();
@@ -121,29 +131,46 @@ export default async function ClientWorkoutView() {
   }
 
   let allExercises = [];
-  if (modifyMuscles.size > 0) {
+  if (restrictedMuscles.size > 0 || modifyMuscles.size > 0) {
     const { data } = await supabase
       .from("exercises")
       .select("id, name, muscle_groups, equipment_type");
     allExercises = data || [];
   }
 
-  function resolveDisplay(row) {
-    const ex = row.exercises;
-    const muscle = ex?.muscle_groups?.[0];
+  function findSafeAlternate(primaryMuscle, excludeId, usedInDay, requireSaferEquipment) {
+    return allExercises.find((a) => {
+      if (a.id === excludeId) return false;
+      if (usedInDay.has(a.id)) return false;
+      if (a.muscle_groups?.[0] !== primaryMuscle) return false;
+      if (requireSaferEquipment && !SAFER_EQUIPMENT.includes(a.equipment_type)) return false;
+      return !overlapsAny(muscleSet(a), restrictedMuscles);
+    });
+  }
 
-    if (restrictedMuscles.has(muscle)) {
-      return { skipped: true };
+  function resolveDisplay(row, usedInDay) {
+    const ex = row.exercises;
+    const exMuscles = muscleSet(ex);
+    const primaryMuscle = ex?.muscle_groups?.[0];
+
+    const isRestricted = overlapsAny(exMuscles, restrictedMuscles);
+    if (isRestricted) {
+      const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, false);
+      if (alt) {
+        usedInDay.add(alt.id);
+        return { exercise: alt, swapped: true };
+      }
+      return { skipped: true, original: ex };
     }
 
-    if (modifyMuscles.has(muscle) && !SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
-      const alt = allExercises.find(
-        (a) =>
-          a.id !== ex.id &&
-          a.muscle_groups?.[0] === muscle &&
-          SAFER_EQUIPMENT.includes(a.equipment_type)
-      );
-      if (alt) return { exercise: alt, modified: true };
+    const needsModify = overlapsAny(exMuscles, modifyMuscles);
+    if (needsModify && !SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
+      const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, true);
+      if (alt) {
+        usedInDay.add(alt.id);
+        return { exercise: alt, modified: true };
+      }
+      return { exercise: ex, caution: true };
     }
 
     return { exercise: ex };
@@ -157,6 +184,7 @@ export default async function ClientWorkoutView() {
           .filter((r) => r.day_of_week === idx)
           .sort((a, b) => a.order_index - b.order_index);
         if (rows.length === 0) return null;
+        const usedInDay = new Set();
         return (
           <div key={idx} style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--steel)", marginBottom: 6 }}>
@@ -164,7 +192,7 @@ export default async function ClientWorkoutView() {
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               {rows.map((r, i) => {
-                const display = resolveDisplay(r);
+                const display = resolveDisplay(r, usedInDay);
                 return (
                   <div
                     key={r.id}
@@ -173,10 +201,10 @@ export default async function ClientWorkoutView() {
                     {display.skipped ? (
                       <div>
                         <div style={{ fontWeight: 600, color: "var(--steel)" }}>
-                          {r.exercises?.name}
+                          {display.original?.name}
                         </div>
                         <div style={{ fontSize: 12, color: "var(--rust)", fontWeight: 700 }}>
-                          Skipped — recovering from injury
+                          Skipped — no safe alternative available for your injury
                         </div>
                       </div>
                     ) : (
@@ -185,9 +213,19 @@ export default async function ClientWorkoutView() {
                         <div className="muted">
                           {r.sets} sets × {r.reps_target} {r.weight ? `@ ${r.weight}` : ""}
                         </div>
+                        {display.swapped && (
+                          <div style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700, marginTop: 2 }}>
+                            Swapped — safer alternative for your injury
+                          </div>
+                        )}
                         {display.modified && (
                           <div style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700, marginTop: 2 }}>
                             Modified for injury recovery
+                          </div>
+                        )}
+                        {display.caution && (
+                          <div style={{ fontSize: 12, color: "var(--rust)", fontWeight: 700, marginTop: 2 }}>
+                            Use caution — no gentler alternative found
                           </div>
                         )}
                       </div>
