@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import StartPlanForm from "./start-plan-form";
+import SignOutButton from "@/app/sign-out-button";
 
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
@@ -8,7 +8,7 @@ function getAccessStatus(packageEndDate) {
   return packageEndDate >= today ? "active" : "expired";
 }
 
-export default async function PackagePage() {
+export default async function ClientDashboard() {
   const supabase = createClient();
   const {
     data: { user },
@@ -16,75 +16,58 @@ export default async function PackagePage() {
 
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "client") redirect("/dashboard/coach");
+
   const { data: link } = await supabase
     .from("coach_client_links")
-    .select("coach_id, package_start_date, package_end_date")
+    .select("package_end_date, profiles:coach_id (full_name)")
     .eq("client_id", user.id)
     .maybeSingle();
 
   const status = getAccessStatus(link?.package_end_date);
 
-  const { data: pendingRequest } = await supabase
-    .from("package_requests")
-    .select("*")
-    .eq("client_id", user.id)
-    .eq("confirmed", false)
-    .order("created_at", { ascending: false })
-    .maybeSingle();
-
-  const { data: activeRequest } = await supabase
-    .from("package_requests")
-    .select("*")
-    .eq("client_id", user.id)
-    .eq("confirmed", true)
-    .order("created_at", { ascending: false })
-    .maybeSingle();
-
   return (
     <div>
-      <h2 style={{ fontSize: 18, marginBottom: 12 }}>Your Package</h2>
+      <div className="top-bar">
+        <span className="wordmark">TENSILE</span>
+        <SignOutButton />
+      </div>
 
-      {status === "active" && (
-        <div className="card">
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Active package</div>
-          {activeRequest && (
-            <>
-              <div style={{ fontSize: 13, marginBottom: 4 }}>
-                Training: {activeRequest.days_per_week} days/week
-              </div>
-              <div style={{ fontSize: 13, marginBottom: 4 }}>
-                Coach chat: {activeRequest.chat_frequency}
-              </div>
-            </>
-          )}
-          <div style={{ fontSize: 13, marginBottom: 4 }}>
-            Start date: {link.package_start_date}
-          </div>
-          <div style={{ fontSize: 13 }}>
-            End date: {link.package_end_date}
-          </div>
-        </div>
-      )}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 20px" }}>
+        <h1 style={{ fontSize: 22, marginBottom: 4 }}>Hi {profile?.full_name}</h1>
+        <p className="muted" style={{ marginBottom: 24 }}>
+          {link?.profiles?.full_name
+            ? `Coached by ${link.profiles.full_name}`
+            : "Client dashboard"}
+        </p>
 
-      {status === "expired" && (
-        <div className="empty-state" style={{ marginBottom: 16 }}>
-          Your package expired on {link.package_end_date}. Choose a new
-          package below to renew.
-        </div>
-      )}
-
-      {status !== "active" &&
-        (pendingRequest ? (
+        {status === "active" && (
           <div className="empty-state">
-            Request sent: {pendingRequest.days_per_week} days/week,{" "}
-            {pendingRequest.chat_frequency} chat — ${pendingRequest.price}.
-            Waiting for your coach to confirm payment.
+            Your package is active until {link.package_end_date}. Check the
+            Workout, Injuries, and Meal tabs above.
           </div>
-        ) : link?.coach_id ? (
-          <StartPlanForm coachId={link.coach_id} clientId={user.id} />
-        ) : (
-          <div className="empty-state">You&apos;re not linked to a coach yet.</div>
-        ))}
+        )}
+
+        {status === "pending" && (
+          <div className="empty-state">
+            Your coach hasn&apos;t activated your package yet. Once payment
+            is confirmed, your plans will appear here.
+          </div>
+        )}
+
+        {status === "expired" && (
+          <div className="empty-state">
+            Your package expired on {link.package_end_date}. Contact your
+            coach to renew.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
