@@ -12,11 +12,41 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
   const [activeDay, setActiveDay] = useState(0);
   const [pickerFor, setPickerFor] = useState(null);
   const [search, setSearch] = useState("");
+  const [equipmentFilter, setEquipmentFilter] = useState("all");
+  const [muscleFilter, setMuscleFilter] = useState("all");
   const [savingId, setSavingId] = useState(null);
 
   const dayRows = initialPlan
     .filter((r) => r.day_of_week === activeDay)
     .sort((a, b) => a.order_index - b.order_index);
+
+  const equipmentOptions = [
+    "all",
+    ...new Set(allExercises.map((ex) => ex.equipment_type).filter(Boolean)),
+  ].sort();
+
+  const muscleOptions = [
+    "all",
+    ...new Set(allExercises.map((ex) => ex.muscle_groups?.[0]).filter(Boolean)),
+  ].sort();
+
+  function mainMuscle(exercise) {
+    return exercise?.muscle_groups?.[0] || "";
+  }
+
+  function openPicker(id) {
+    setPickerFor(id);
+    setSearch("");
+    setEquipmentFilter("all");
+    setMuscleFilter("all");
+  }
+
+  function closePicker() {
+    setPickerFor(null);
+    setSearch("");
+    setEquipmentFilter("all");
+    setMuscleFilter("all");
+  }
 
   async function updateRow(id, fields) {
     setSavingId(id);
@@ -42,24 +72,42 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
       weight: "",
       order_index: nextOrder,
     });
-    setPickerFor(null);
-    setSearch("");
+    closePicker();
     router.refresh();
   }
 
   async function swapExercise(rowId, newExerciseId) {
     await updateRow(rowId, { exercise_id: newExerciseId });
-    setPickerFor(null);
-    setSearch("");
+    closePicker();
   }
 
-  const filteredExercises = allExercises.filter((ex) =>
-    ex.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  function mainMuscle(exercise) {
-    return exercise?.muscle_groups?.[0] || "";
+  function swapCandidates(currentExercise) {
+    const lockedMuscle = mainMuscle(currentExercise);
+    return allExercises.filter((ex) => {
+      const matchesMuscle = mainMuscle(ex) === lockedMuscle;
+      const matchesEquipment =
+        equipmentFilter === "all" || ex.equipment_type === equipmentFilter;
+      const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
+      return matchesMuscle && matchesEquipment && matchesSearch;
+    });
   }
+
+  const addCandidates = allExercises.filter((ex) => {
+    const matchesMuscle = muscleFilter === "all" || mainMuscle(ex) === muscleFilter;
+    const matchesEquipment =
+      equipmentFilter === "all" || ex.equipment_type === equipmentFilter;
+    const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
+    return matchesMuscle && matchesEquipment && matchesSearch;
+  });
+
+  const selectStyle = {
+    padding: "8px 10px",
+    border: "1px solid var(--line)",
+    borderRadius: 6,
+    fontSize: 13,
+    background: "var(--card)",
+    color: "var(--ink)",
+  };
 
   return (
     <div>
@@ -92,6 +140,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
 
       {dayRows.map((row) => {
         const exercise = allExercises.find((ex) => ex.id === row.exercise_id);
+        const candidates = pickerFor === row.id ? swapCandidates(exercise) : [];
         return (
           <div key={row.id} className="card" style={{ marginBottom: 12, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -100,7 +149,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                 <div className="muted">{mainMuscle(exercise)} · {exercise?.equipment_type}</div>
               </div>
               <button
-                onClick={() => setPickerFor(pickerFor === row.id ? null : row.id)}
+                onClick={() => (pickerFor === row.id ? closePicker() : openPicker(row.id))}
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
@@ -116,6 +165,22 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
 
             {pickerFor === row.id && (
               <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                  Showing {mainMuscle(exercise)} exercises only
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <select
+                    value={equipmentFilter}
+                    onChange={(e) => setEquipmentFilter(e.target.value)}
+                    style={{ ...selectStyle, flex: 1 }}
+                  >
+                    {equipmentOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt === "all" ? "Any equipment" : opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <input
                   placeholder="Search exercises..."
                   value={search}
@@ -130,7 +195,12 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                   }}
                 />
                 <div style={{ maxHeight: 180, overflowY: "auto" }}>
-                  {filteredExercises.map((ex) => (
+                  {candidates.length === 0 && (
+                    <div className="muted" style={{ fontSize: 13, padding: "8px 4px" }}>
+                      No matches for that equipment.
+                    </div>
+                  )}
+                  {candidates.map((ex) => (
                     <div
                       key={ex.id}
                       onClick={() => swapExercise(row.id, ex.id)}
@@ -143,7 +213,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                     >
                       {ex.name}
                       <span className="muted" style={{ marginLeft: 6 }}>
-                        {mainMuscle(ex)}
+                        {ex.equipment_type}
                       </span>
                     </div>
                   ))}
@@ -222,6 +292,36 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
 
       <div className="card" style={{ padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Add an exercise</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <select
+            value={muscleFilter}
+            onChange={(e) => {
+              setMuscleFilter(e.target.value);
+              setPickerFor("add");
+            }}
+            style={{ ...selectStyle, flex: 1 }}
+          >
+            {muscleOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt === "all" ? "Any muscle" : opt}
+              </option>
+            ))}
+          </select>
+          <select
+            value={equipmentFilter}
+            onChange={(e) => {
+              setEquipmentFilter(e.target.value);
+              setPickerFor("add");
+            }}
+            style={{ ...selectStyle, flex: 1 }}
+          >
+            {equipmentOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt === "all" ? "Any equipment" : opt}
+              </option>
+            ))}
+          </select>
+        </div>
         <input
           placeholder="Search exercises..."
           value={pickerFor === "add" ? search : ""}
@@ -238,7 +338,12 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
         />
         {pickerFor === "add" && (
           <div style={{ maxHeight: 180, overflowY: "auto" }}>
-            {filteredExercises.map((ex) => (
+            {addCandidates.length === 0 && (
+              <div className="muted" style={{ fontSize: 13, padding: "8px 4px" }}>
+                No matches.
+              </div>
+            )}
+            {addCandidates.map((ex) => (
               <div
                 key={ex.id}
                 onClick={() => addExercise(ex.id)}
@@ -251,7 +356,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
               >
                 {ex.name}
                 <span className="muted" style={{ marginLeft: 6 }}>
-                  {mainMuscle(ex)}
+                  {mainMuscle(ex)} · {ex.equipment_type}
                 </span>
               </div>
             ))}
