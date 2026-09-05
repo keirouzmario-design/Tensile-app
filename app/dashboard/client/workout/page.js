@@ -9,53 +9,47 @@ function getAccessStatus(packageEndDate) {
   return packageEndDate >= today ? "active" : "expired";
 }
 
-// Maps each reportable body part to the exercise muscle groups it affects.
-// Joints that bear weight while standing (ankle, knee, hip, foot, achilles)
-// are broadened to include the major standing/leg muscles.
-const INJURY_MUSCLE_MAP = {
-  chest: ["chest"],
-  back: ["back"],
-  shoulders: ["shoulders", "chest", "triceps"],
-  biceps: ["biceps"],
-  triceps: ["triceps"],
-  forearms: ["forearms"],
-  lats: ["lats"],
-  traps: ["traps"],
-  quads: ["quads"],
-  hamstrings: ["hamstrings"],
-  glutes: ["glutes"],
-  calves: ["calves"],
-  core: ["core"],
-  obliques: ["core"],
-  hip_flexors: ["quads", "core"],
-  adductors: ["quads", "glutes"],
-  abductors: ["glutes"],
-  rotator_cuff: ["shoulders", "chest", "back", "triceps"],
-  neck: ["traps", "shoulders"],
-  upper_back_spine: ["back", "lats", "traps"],
-  lower_back_spine: ["back", "core"],
+// CORE_MUSCLES: the muscle(s) literally located at/in each body part. These
+// are the only muscles allowed to disqualify a replacement exercise.
+const CORE_MUSCLES = {
+  chest: ["chest"], back: ["back"], shoulders: ["shoulders"], biceps: ["biceps"],
+  triceps: ["triceps"], forearms: ["forearms"], lats: ["lats"], traps: ["traps"],
+  quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["glutes"], calves: ["calves"],
+  core: ["core"], obliques: ["core"], hip_flexors: ["quads"], adductors: ["quads"],
+  abductors: ["glutes"], rotator_cuff: ["shoulders"], neck: ["traps", "shoulders"],
+  upper_back_spine: ["back", "traps"], lower_back_spine: ["back", "core"],
+  shoulder_joint: ["shoulders"], elbow: ["biceps", "triceps"], wrist: ["forearms"],
+  hip: ["glutes"], knee: ["quads", "hamstrings"], ankle: ["calves"], foot: ["calves"],
+  jaw_tmj: [], ribs_sternum: ["chest", "core"], collarbone: ["shoulders"],
+  hand_fingers: ["forearms"], toes: ["calves"], achilles_tendon: ["calves"],
+  groin: ["quads"], tailbone: ["core"], cardiovascular: [], respiratory: [],
+  pregnancy: [], general: [], neurological_balance: [], digestive: [],
+  diabetes_bloodsugar: [],
+};
+
+// TRIGGER_MUSCLES: broader set used only to DETECT which exercises are
+// affected (includes muscles that get secondary stress, e.g. chest press
+// loading the shoulder). Never used to disqualify a replacement.
+const TRIGGER_MUSCLES = {
+  chest: ["chest"], back: ["back"], shoulders: ["shoulders", "chest", "triceps"],
+  biceps: ["biceps"], triceps: ["triceps"], forearms: ["forearms"], lats: ["lats"],
+  traps: ["traps"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["glutes"],
+  calves: ["calves"], core: ["core"], obliques: ["core"], hip_flexors: ["quads", "core"],
+  adductors: ["quads", "glutes"], abductors: ["glutes"],
+  rotator_cuff: ["shoulders", "chest", "back", "triceps"], neck: ["traps", "shoulders"],
+  upper_back_spine: ["back", "lats", "traps"], lower_back_spine: ["back", "core"],
   shoulder_joint: ["shoulders", "chest", "back", "biceps", "triceps", "lats"],
-  elbow: ["biceps", "triceps", "forearms"],
-  wrist: ["forearms"],
+  elbow: ["biceps", "triceps", "forearms"], wrist: ["forearms"],
   hip: ["glutes", "quads", "hamstrings", "core"],
   knee: ["quads", "hamstrings", "glutes", "calves"],
   ankle: ["calves", "quads", "hamstrings", "glutes", "core"],
-  foot: ["calves", "quads", "hamstrings", "glutes", "core"],
-  jaw_tmj: [],
-  ribs_sternum: ["chest", "back", "core"],
-  collarbone: ["shoulders", "chest", "back"],
-  hand_fingers: ["forearms"],
-  toes: ["calves"],
+  foot: ["calves", "quads", "hamstrings", "glutes", "core"], jaw_tmj: [],
+  ribs_sternum: ["chest", "back", "core"], collarbone: ["shoulders", "chest", "back"],
+  hand_fingers: ["forearms"], toes: ["calves"],
   achilles_tendon: ["calves", "quads", "hamstrings", "glutes"],
-  groin: ["quads", "glutes", "hamstrings"],
-  tailbone: ["core", "glutes"],
-  cardiovascular: [],
-  respiratory: [],
-  pregnancy: [],
-  general: [],
-  neurological_balance: [],
-  digestive: [],
-  diabetes_bloodsugar: [],
+  groin: ["quads", "glutes", "hamstrings"], tailbone: ["core", "glutes"],
+  cardiovascular: [], respiratory: [], pregnancy: [], general: [],
+  neurological_balance: [], digestive: [], diabetes_bloodsugar: [],
 };
 
 const SAFER_EQUIPMENT = ["machine", "cable"];
@@ -119,19 +113,26 @@ export default async function ClientWorkoutView() {
     );
   }
 
-  const restrictedMuscles = new Set();
-  const modifyMuscles = new Set();
+  const hardRestrict = new Set();
+  const modifyCore = new Set();
+  const softFlag = new Set();
+
   for (const inj of activeInjuries) {
-    const muscles = INJURY_MUSCLE_MAP[inj.body_part] || [];
+    const core = CORE_MUSCLES[inj.body_part] || [];
+    const trigger = TRIGGER_MUSCLES[inj.body_part] || [];
+    const secondary = trigger.filter((m) => !core.includes(m));
+
     if (inj.resolved_action === "local_rest") {
-      muscles.forEach((m) => restrictedMuscles.add(m));
+      core.forEach((m) => hardRestrict.add(m));
     } else if (inj.resolved_action === "local_modify") {
-      muscles.forEach((m) => modifyMuscles.add(m));
+      core.forEach((m) => modifyCore.add(m));
     }
+    secondary.forEach((m) => softFlag.add(m));
   }
 
+  const needExerciseList = hardRestrict.size > 0 || modifyCore.size > 0 || softFlag.size > 0;
   let allExercises = [];
-  if (restrictedMuscles.size > 0 || modifyMuscles.size > 0) {
+  if (needExerciseList) {
     const { data } = await supabase
       .from("exercises")
       .select("id, name, muscle_groups, equipment_type");
@@ -144,7 +145,7 @@ export default async function ClientWorkoutView() {
       if (usedInDay.has(a.id)) return false;
       if (a.muscle_groups?.[0] !== primaryMuscle) return false;
       if (requireSaferEquipment && !SAFER_EQUIPMENT.includes(a.equipment_type)) return false;
-      return !overlapsAny(muscleSet(a), restrictedMuscles);
+      return !overlapsAny(muscleSet(a), hardRestrict);
     });
   }
 
@@ -153,8 +154,7 @@ export default async function ClientWorkoutView() {
     const exMuscles = muscleSet(ex);
     const primaryMuscle = ex?.muscle_groups?.[0];
 
-    const isRestricted = overlapsAny(exMuscles, restrictedMuscles);
-    if (isRestricted) {
+    if (overlapsAny(exMuscles, hardRestrict)) {
       const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, false);
       if (alt) {
         usedInDay.add(alt.id);
@@ -163,14 +163,28 @@ export default async function ClientWorkoutView() {
       return { skipped: true, original: ex };
     }
 
-    const needsModify = overlapsAny(exMuscles, modifyMuscles);
-    if (needsModify && !SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
-      const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, true);
-      if (alt) {
-        usedInDay.add(alt.id);
-        return { exercise: alt, modified: true };
+    if (overlapsAny(exMuscles, modifyCore)) {
+      if (!SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
+        const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, true);
+        if (alt) {
+          usedInDay.add(alt.id);
+          return { exercise: alt, modified: true };
+        }
+        return { exercise: ex, caution: true };
       }
-      return { exercise: ex, caution: true };
+      return { exercise: ex };
+    }
+
+    if (overlapsAny(exMuscles, softFlag)) {
+      if (!SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
+        const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, true);
+        if (alt) {
+          usedInDay.add(alt.id);
+          return { exercise: alt, modified: true };
+        }
+        return { exercise: ex, caution: true };
+      }
+      return { exercise: ex };
     }
 
     return { exercise: ex };
