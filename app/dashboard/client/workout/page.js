@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -10,71 +11,27 @@ function getAccessStatus(packageEndDate) {
 }
 
 const CORE_MUSCLES = {
-  chest: ["chest"],
-  back: ["back"],
-  shoulders: ["shoulders"],
-  biceps: ["biceps"],
-  triceps: ["triceps"],
-  forearms: ["forearms"],
-  lats: ["lats"],
-  traps: ["traps"],
-  quads: ["quads"],
-  hamstrings: ["hamstrings"],
-  glutes: ["glutes"],
-  calves: ["calves"],
-  core: ["core"],
-  obliques: ["core"],
-  hip_flexors: ["quads"],
-  adductors: ["quads"],
-  abductors: ["glutes"],
-  rotator_cuff: ["shoulders"],
-  neck: ["traps", "shoulders"],
-  upper_back_spine: ["back", "traps"],
-  lower_back_spine: ["back", "core"],
-  shoulder_joint: ["shoulders"],
-  elbow: ["biceps", "triceps"],
-  wrist: ["forearms"],
-  hip: ["glutes"],
-  knee: ["quads", "hamstrings"],
-  ankle: ["calves"],
-  foot: ["calves"],
-  jaw_tmj: [],
-  ribs_sternum: ["chest", "core"],
-  collarbone: ["shoulders"],
-  hand_fingers: ["forearms"],
-  toes: ["calves"],
-  achilles_tendon: ["calves"],
-  groin: ["quads"],
-  tailbone: ["core"],
-  cardiovascular: [],
-  respiratory: [],
-  pregnancy: [],
-  general: [],
-  neurological_balance: [],
-  digestive: [],
+  chest: ["chest"], back: ["back"], shoulders: ["shoulders"], biceps: ["biceps"],
+  triceps: ["triceps"], forearms: ["forearms"], lats: ["lats"], traps: ["traps"],
+  quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["glutes"], calves: ["calves"],
+  core: ["core"], obliques: ["core"], hip_flexors: ["quads"], adductors: ["quads"],
+  abductors: ["glutes"], rotator_cuff: ["shoulders"], neck: ["traps", "shoulders"],
+  upper_back_spine: ["back", "traps"], lower_back_spine: ["back", "core"],
+  shoulder_joint: ["shoulders"], elbow: ["biceps", "triceps"], wrist: ["forearms"],
+  hip: ["glutes"], knee: ["quads", "hamstrings"], ankle: ["calves"], foot: ["calves"],
+  jaw_tmj: [], ribs_sternum: ["chest", "core"], collarbone: ["shoulders"],
+  hand_fingers: ["forearms"], toes: ["calves"], achilles_tendon: ["calves"],
+  groin: ["quads"], tailbone: ["core"], cardiovascular: [], respiratory: [],
+  pregnancy: [], general: [], neurological_balance: [], digestive: [],
   diabetes_bloodsugar: [],
 };
 
 const BODY_PART_JOINT = {
-  shoulders: "shoulder",
-  shoulder_joint: "shoulder",
-  rotator_cuff: "shoulder",
-  collarbone: "shoulder",
-  elbow: "elbow",
-  wrist: "wrist",
-  hand_fingers: "wrist",
-  knee: "knee",
-  hip: "hip",
-  groin: "hip",
-  adductors: "hip",
-  abductors: "hip",
-  hip_flexors: "hip",
-  ankle: "ankle",
-  foot: "ankle",
-  achilles_tendon: "ankle",
-  toes: "ankle",
-  lower_back_spine: "lower_back",
-  tailbone: "lower_back",
+  shoulders: "shoulder", shoulder_joint: "shoulder", rotator_cuff: "shoulder",
+  collarbone: "shoulder", elbow: "elbow", wrist: "wrist", hand_fingers: "wrist",
+  knee: "knee", hip: "hip", groin: "hip", adductors: "hip", abductors: "hip",
+  hip_flexors: "hip", ankle: "ankle", foot: "ankle", achilles_tendon: "ankle",
+  toes: "ankle", lower_back_spine: "lower_back", tailbone: "lower_back",
 };
 
 const SAFER_EQUIPMENT = ["machine", "cable"];
@@ -128,6 +85,30 @@ export default async function ClientWorkoutView() {
     .select("*")
     .eq("client_id", user.id)
     .eq("active", true);
+
+  const { data: adjustments } = await supabase
+    .from("workout_adjustments")
+    .select("exercise_id, recommendation, created_at")
+    .eq("client_id", user.id)
+    .order("created_at", { ascending: false });
+
+  const latestRecommendation = {};
+  for (const adj of adjustments || []) {
+    if (!(adj.exercise_id in latestRecommendation)) {
+      latestRecommendation[adj.exercise_id] = adj.recommendation;
+    }
+  }
+
+  const RECOMMENDATION_LABELS = {
+    increase: "↑ Increase weight next time",
+    hold: "→ Hold steady",
+    deload: "↓ Discuss with your coach",
+  };
+  const RECOMMENDATION_COLORS = {
+    increase: "var(--moss-deep)",
+    hold: "var(--steel)",
+    deload: "var(--rust)",
+  };
 
   const activeInjuries = injuries || [];
   const hasGlobalRest = activeInjuries.some((i) => i.resolved_action === "global_rest");
@@ -241,8 +222,23 @@ export default async function ClientWorkoutView() {
         if (rows.length === 0) return null;
         return (
           <div key={idx} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--steel)", marginBottom: 6 }}>
-              {label.toUpperCase()}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--steel)" }}>
+                {label.toUpperCase()}
+              </div>
+              <Link
+                href={`/dashboard/client/workout/log?day=${idx}`}
+                style={{ fontSize: 12, fontWeight: 700, color: "var(--moss-deep)" }}
+              >
+                Log this day →
+              </Link>
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               {rows.map((r, i) => {
@@ -280,6 +276,18 @@ export default async function ClientWorkoutView() {
                         {display.caution && (
                           <div style={{ fontSize: 12, color: "var(--rust)", fontWeight: 700, marginTop: 2 }}>
                             Use caution — no gentler alternative found
+                          </div>
+                        )}
+                        {display.exercise?.id && latestRecommendation[display.exercise.id] && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: RECOMMENDATION_COLORS[latestRecommendation[display.exercise.id]],
+                              marginTop: 2,
+                            }}
+                          >
+                            {RECOMMENDATION_LABELS[latestRecommendation[display.exercise.id]]}
                           </div>
                         )}
                       </div>
