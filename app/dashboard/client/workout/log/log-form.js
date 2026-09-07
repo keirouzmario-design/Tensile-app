@@ -4,6 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const STARTING_WEIGHT_BY_EQUIPMENT = {
+  bodyweight: "Bodyweight",
+  barbell: "20 kg",
+  dumbbell: "5 kg",
+  kettlebell: "8 kg",
+  cable: "10 kg",
+  machine: "10 kg",
+  bands: "Light band",
+};
+
 function parseRange(repsTarget) {
   const parts = (repsTarget || "").split("-").map((s) => parseInt(s.trim(), 10));
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -37,14 +47,21 @@ function parseWeightValue(weightStr) {
   return { value: parseFloat(match[1]), suffix: match[3] || "" };
 }
 
-function adjustWeight(currentWeight, recommendation) {
-  const parsed = parseWeightValue(currentWeight);
-  if (!parsed) return currentWeight;
+function pickSessionWeight(rowSets) {
+  for (const s of rowSets) {
+    if (s.weight && s.weight.trim() !== "") return s.weight.trim();
+  }
+  return null;
+}
+
+function computeNextWeight(sessionWeight, recommendation) {
+  if (!sessionWeight) return null;
+  const parsed = parseWeightValue(sessionWeight);
+  if (!parsed) return sessionWeight;
 
   let newValue = parsed.value;
   if (recommendation === "increase") newValue = parsed.value * 1.05;
   else if (recommendation === "decrease") newValue = parsed.value * 0.9;
-  else return currentWeight;
 
   const rounded = Math.round(newValue * 2) / 2;
   return parsed.suffix ? `${rounded} ${parsed.suffix}` : `${rounded}`;
@@ -56,8 +73,10 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
 
   const initialState = {};
   items.forEach((item) => {
+    const startingWeight =
+      item.weight || STARTING_WEIGHT_BY_EQUIPMENT[item.equipmentType] || "";
     initialState[item.rowId] = Array.from({ length: item.sets }, () => ({
-      weight: item.weight || "",
+      weight: startingWeight,
       reps: "",
       effort: "",
       reason: "",
@@ -89,7 +108,7 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
     setError("");
 
     for (const item of items) {
-      const { min, max } = parseRange(item.repsTarget);
+      const { min } = parseRange(item.repsTarget);
       const rowSets = setsByRow[item.rowId];
       for (const s of rowSets) {
         const repsNum = parseInt(s.reps, 10);
@@ -153,8 +172,9 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
         flagged,
       });
 
-      const newWeight = adjustWeight(item.weight, recommendation);
-      if (newWeight !== item.weight) {
+      const sessionWeight = pickSessionWeight(rowSets);
+      const newWeight = computeNextWeight(sessionWeight, recommendation);
+      if (newWeight && newWeight !== item.weight) {
         weightUpdates.push({ rowId: item.rowId, weight: newWeight });
       }
     }
