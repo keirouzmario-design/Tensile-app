@@ -1,251 +1,406 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import LogForm from "./log-form";
+"use client";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-function getAccessStatus(packageEndDate) {
-  if (!packageEndDate) return "pending";
-  const today = new Date().toISOString().split("T")[0];
-  return packageEndDate >= today ? "active" : "expired";
-}
-
-const CORE_MUSCLES = {
-  chest: ["chest"], back: ["back"], shoulders: ["shoulders"], biceps: ["biceps"],
-  triceps: ["triceps"], forearms: ["forearms"], lats: ["lats"], traps: ["traps"],
-  quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["glutes"], calves: ["calves"],
-  core: ["core"], obliques: ["core"], hip_flexors: ["quads"], adductors: ["quads"],
-  abductors: ["glutes"], rotator_cuff: ["shoulders"], neck: ["traps", "shoulders"],
-  upper_back_spine: ["back", "traps"], lower_back_spine: ["back", "core"],
-  shoulder_joint: ["shoulders"], elbow: ["biceps", "triceps"], wrist: ["forearms"],
-  hip: ["glutes"], knee: ["quads", "hamstrings"], ankle: ["calves"], foot: ["calves"],
-  jaw_tmj: [], ribs_sternum: ["chest", "core"], collarbone: ["shoulders"],
-  hand_fingers: ["forearms"], toes: ["calves"], achilles_tendon: ["calves"],
-  groin: ["quads"], tailbone: ["core"], cardiovascular: [], respiratory: [],
-  pregnancy: [], general: [], neurological_balance: [], digestive: [],
-  diabetes_bloodsugar: [],
+const STARTING_WEIGHT_BY_EQUIPMENT = {
+  bodyweight: "Bodyweight",
+  barbell: "20 kg",
+  dumbbell: "5 kg",
+  kettlebell: "8 kg",
+  cable: "10 kg",
+  machine: "10 kg",
+  bands: "Light band",
 };
 
-const BODY_PART_JOINT = {
-  shoulders: "shoulder", shoulder_joint: "shoulder", rotator_cuff: "shoulder",
-  collarbone: "shoulder", elbow: "elbow", wrist: "wrist", hand_fingers: "wrist",
-  knee: "knee", hip: "hip", groin: "hip", adductors: "hip", abductors: "hip",
-  hip_flexors: "hip", ankle: "ankle", foot: "ankle", achilles_tendon: "ankle",
-  toes: "ankle", lower_back_spine: "lower_back", tailbone: "lower_back",
-};
-
-const SAFER_EQUIPMENT = ["machine", "cable"];
-
-function muscleSet(ex) {
-  return new Set(ex?.muscle_groups || []);
-}
-function jointSet(ex) {
-  return new Set(ex?.joint_stress || []);
-}
-function overlapsAny(items, targetSet) {
-  for (const m of items) {
-    if (targetSet.has(m)) return true;
+function parseRange(repsTarget) {
+  const parts = (repsTarget || "").split("-").map((s) => parseInt(s.trim(), 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return { min: parts[0], max: parts[1] };
   }
-  return false;
+  return { min: 0, max: 999 };
 }
 
-export default async function LogDayPage({ searchParams }) {
-  const dayIndex = parseInt(searchParams?.day, 10);
-  if (isNaN(dayIndex) || dayIndex < 0 || dayIndex > 6) {
-    redirect("/dashboard/client/workout");
+function computeRecommendation(loggedSets, min, max) {
+  const anyBelowMin = loggedSets.some((s) => s.reps < min);
+  if (anyBelowMin) {
+    const painSet = loggedSets.find((s) => s.reps < min && s.reason === "pain");
+    if (painSet) return { recommendation: "flag_pain", flagged: true };
+    return { recommendation: "decrease", flagged: true };
   }
 
+  const allAtOrAboveMax = loggedSets.every((s) => s.reps >= max);
+  if (allAtOrAboveMax) {
+    const anyFailure = loggedSets.some((s) => s.effort === "failure");
+    if (anyFailure) return { recommendation: "hold", flagged: false };
+    return { recommendation: "increase", flagged: false };
+  }
+
+  return { recommendation: "hold", flagged: false };
+}
+
+function parseWeightValue(weightStr) {
+  if (!weightStr) return null;
+  const match = weightStr.trim().match(/^(\d+(\.\d+)?)\s*(.*)$/);
+  if (!match) return null;
+  return { value: parseFloat(match[1]), suffix: match[3] || "" };
+}
+
+function pickSessionWeight(rowSets) {
+  for (const s of rowSets) {
+    if (s.weight && s.weight.trim() !== "") return s.weight.trim();
+  }
+  return null;
+}
+
+function computeNextWeight(sessionWeight, recommendation) {
+  if (!sessionWeight) return null;
+  const parsed = parseWeightValue(sessionWeight);
+  if (!parsed) return sessionWeight;
+
+  let newValue = parsed.value;
+  if (recommendation === "increase") newValue = parsed.value * 1.05;
+  else if (recommendation === "decrease") newValue = parsed.value * 0.9;
+
+  const rounded = Math.round(newValue * 2) / 2;
+  return parsed.suffix ? `${rounded} ${parsed.suffix}` : `${rounded}`;
+}
+
+export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const router = useRouter();
 
-  if (!user) redirect("/login");
+  const initialState = {};
+  items.forEach((item) => {
+    const startingWeight =
+      item.weight || STARTING_WEIGHT_BY_EQUIPMENT[item.equipmentType] || "";
+    initialState[item.rowId] = Array.from({ length: item.sets }, (_, idx) => {
+      const last = item.lastSets ? item.lastSets[idx + 1] : undefined;
+      return {
+        weight: startingWeight,
+        reps: last && last.reps != null ? String(last.reps) : "",
+        effort: last && last.effort ? last.effort : "",
+        reason: last && last.reason ? last.reason : "",
+      };
+    });
+  });
 
-  const { data: link } = await supabase
-    .from("coach_client_links")
-    .select("coach_id, package_end_date")
-    .eq("client_id", user.id)
-    .maybeSingle();
+  const [setsByRow, setSetsByRow] = useState(initialState);
+  const [openInfo, setOpenInfo] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
 
-  const status = getAccessStatus(link?.package_end_date);
-  if (status !== "active") {
-    redirect("/dashboard/client/workout");
+  function updateSet(rowId, setIndex, field, value) {
+    setSetsByRow((prev) => {
+      const rowSets = [...prev[rowId]];
+      rowSets[setIndex] = { ...rowSets[setIndex], [field]: value };
+      return { ...prev, [rowId]: rowSets };
+    });
   }
 
-  const { data: plan } = await supabase
-    .from("workout_plan_exercises")
-    .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions)")
-    .eq("client_id", user.id);
+  function toggleInfo(rowId, panel) {
+    setOpenInfo((prev) => ({
+      ...prev,
+      [rowId]: prev[rowId] === panel ? null : panel,
+    }));
+  }
 
-  const { data: injuries } = await supabase
-    .from("client_injuries")
-    .select("*")
-    .eq("client_id", user.id)
-    .eq("active", true);
+  async function handleSubmit() {
+    setError("");
 
-  const activeInjuries = injuries || [];
-  const hasGlobalRest = activeInjuries.some((i) => i.resolved_action === "global_rest");
+    for (const item of items) {
+      const { min } = parseRange(item.repsTarget);
+      const rowSets = setsByRow[item.rowId];
+      for (const s of rowSets) {
+        const repsNum = parseInt(s.reps, 10);
+        if (s.reps === "" || isNaN(repsNum)) {
+          setError(`Please enter reps for every set of ${item.exerciseName}.`);
+          return;
+        }
+        if (repsNum < min && !s.reason) {
+          setError(`Please select a reason for the missed reps on ${item.exerciseName}.`);
+          return;
+        }
+      }
+    }
 
-  if (hasGlobalRest) {
+    setSaving(true);
+
+    const logRows = [];
+    const adjustmentRows = [];
+    const weightUpdates = [];
+
+    for (const item of items) {
+      const { min, max } = parseRange(item.repsTarget);
+      const rowSets = setsByRow[item.rowId];
+
+      const parsedSets = rowSets.map((s, idx) => {
+        const reps = parseInt(s.reps, 10);
+        return {
+          set_number: idx + 1,
+          reps,
+          weight: s.weight,
+          effort: reps >= max ? s.effort || null : null,
+          reason: reps < min ? s.reason || null : null,
+        };
+      });
+
+      parsedSets.forEach((s) => {
+        logRows.push({
+          client_id: clientId,
+          coach_id: coachId,
+          exercise_id: item.exerciseId,
+          day_of_week: dayOfWeek,
+          set_number: s.set_number,
+          reps_logged: s.reps,
+          weight_logged: s.weight,
+          effort: s.effort,
+          shortfall_reason: s.reason,
+        });
+      });
+
+      const { recommendation, flagged } = computeRecommendation(
+        parsedSets.map((s) => ({ reps: s.reps, effort: s.effort, reason: s.reason })),
+        min,
+        max
+      );
+
+      adjustmentRows.push({
+        client_id: clientId,
+        coach_id: coachId,
+        exercise_id: item.exerciseId,
+        recommendation,
+        flagged,
+      });
+
+      const sessionWeight = pickSessionWeight(rowSets);
+      const newWeight = computeNextWeight(sessionWeight, recommendation);
+      if (newWeight && newWeight !== item.weight) {
+        weightUpdates.push({ rowId: item.rowId, weight: newWeight });
+      }
+    }
+
+    const { error: logError } = await supabase.from("workout_log_sets").insert(logRows);
+    if (logError) {
+      setSaving(false);
+      setError("Something went wrong saving your log. Please try again.");
+      return;
+    }
+
+    await supabase.from("workout_adjustments").insert(adjustmentRows);
+
+    for (const u of weightUpdates) {
+      await supabase
+        .from("workout_plan_exercises")
+        .update({ weight: u.weight })
+        .eq("id", u.rowId);
+    }
+
+    setSaving(false);
+    setDone(true);
+    router.refresh();
+  }
+
+  if (done) {
     return (
       <div className="empty-state">
-        Logging is paused while you're on full rest for an active injury.
+        Logged! Great work.{" "}
+        <a href="/dashboard/client/workout" style={{ color: "var(--moss-deep)", fontWeight: 700 }}>
+          Back to your plan
+        </a>
       </div>
     );
   }
 
-  const hardRestrictMuscles = new Set();
-  const hardRestrictJoints = new Set();
-  const modifyMuscles = new Set();
-  const modifyJoints = new Set();
-
-  for (const inj of activeInjuries) {
-    const muscles = CORE_MUSCLES[inj.body_part] || [];
-    const joint = BODY_PART_JOINT[inj.body_part];
-    if (inj.resolved_action === "local_rest") {
-      muscles.forEach((m) => hardRestrictMuscles.add(m));
-      if (joint) hardRestrictJoints.add(joint);
-    } else if (inj.resolved_action === "local_modify") {
-      muscles.forEach((m) => modifyMuscles.add(m));
-      if (joint) modifyJoints.add(joint);
-    }
-  }
-
-  const needExerciseList =
-    hardRestrictMuscles.size > 0 ||
-    hardRestrictJoints.size > 0 ||
-    modifyMuscles.size > 0 ||
-    modifyJoints.size > 0;
-
-  let allExercises = [];
-  if (needExerciseList) {
-    const { data } = await supabase
-      .from("exercises")
-      .select("id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions");
-    allExercises = data || [];
-  }
-
-  function isSafeFromHardRestrict(a) {
-    return (
-      !overlapsAny(muscleSet(a), hardRestrictMuscles) &&
-      !overlapsAny(jointSet(a), hardRestrictJoints)
-    );
-  }
-
-  function findSafeAlternate(primaryMuscle, excludeId, usedInDay, requireSaferEquipment) {
-    return allExercises.find((a) => {
-      if (a.id === excludeId) return false;
-      if (usedInDay.has(a.id)) return false;
-      if (a.muscle_groups?.[0] !== primaryMuscle) return false;
-      if (requireSaferEquipment && !SAFER_EQUIPMENT.includes(a.equipment_type)) return false;
-      return isSafeFromHardRestrict(a);
-    });
-  }
-
-  function resolveDisplay(row, usedInDay) {
-    const ex = row.exercises;
-    const exMuscles = muscleSet(ex);
-    const exJoints = jointSet(ex);
-    const primaryMuscle = ex?.muscle_groups?.[0];
-
-    const isHardRestricted =
-      overlapsAny(exMuscles, hardRestrictMuscles) || overlapsAny(exJoints, hardRestrictJoints);
-
-    if (isHardRestricted) {
-      const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, false);
-      if (alt) {
-        usedInDay.add(alt.id);
-        return { exercise: alt };
-      }
-      return { skipped: true };
-    }
-
-    const needsModify =
-      overlapsAny(exMuscles, modifyMuscles) || overlapsAny(exJoints, modifyJoints);
-
-    if (needsModify && !SAFER_EQUIPMENT.includes(ex?.equipment_type)) {
-      const alt = findSafeAlternate(primaryMuscle, ex.id, usedInDay, true);
-      if (alt) {
-        usedInDay.add(alt.id);
-        return { exercise: alt };
-      }
-    }
-
-    return { exercise: ex };
-  }
-
-  const usedThisWeek = new Set(
-    (plan || []).map((r) => r.exercises?.id).filter(Boolean)
-  );
-
-  const dayRows = (plan || [])
-    .filter((r) => r.day_of_week === dayIndex)
-    .sort((a, b) => a.order_index - b.order_index);
-
-  const resolvedRows = [];
-  for (const row of dayRows) {
-    const display = resolveDisplay(row, usedThisWeek);
-    if (display.skipped) continue;
-    resolvedRows.push({ row, exercise: display.exercise });
-  }
-
-  const exerciseIds = resolvedRows.map((r) => r.exercise.id);
-  let lastRepsByExercise = {};
-  if (exerciseIds.length > 0) {
-    const { data: recentLogs } = await supabase
-      .from("workout_log_sets")
-      .select("exercise_id, set_number, reps_logged, session_date")
-      .eq("client_id", user.id)
-      .in("exercise_id", exerciseIds)
-      .order("session_date", { ascending: false });
-
-    const latestSessionDateByExercise = {};
-    for (const log of recentLogs || []) {
-      if (!(log.exercise_id in latestSessionDateByExercise)) {
-        latestSessionDateByExercise[log.exercise_id] = log.session_date;
-      }
-    }
-    for (const log of recentLogs || []) {
-      if (log.session_date === latestSessionDateByExercise[log.exercise_id]) {
-        if (!lastRepsByExercise[log.exercise_id]) lastRepsByExercise[log.exercise_id] = {};
-        lastRepsByExercise[log.exercise_id][log.set_number] = log.reps_logged;
-      }
-    }
-  }
-
-  const items = resolvedRows.map(({ row, exercise }) => ({
-    rowId: row.id,
-    exerciseId: exercise.id,
-    exerciseName: exercise.name,
-    sets: row.sets,
-    repsTarget: row.reps_target,
-    weight: row.weight || "",
-    equipmentType: exercise.equipment_type || "",
-    videoUrl: exercise.video_url || "",
-    instructions: exercise.instructions || "",
-    lastReps: lastRepsByExercise[exercise.id] || {},
-  }));
-
   return (
     <div>
-      <h2 style={{ fontSize: 18, marginBottom: 4 }}>Log {DAYS[dayIndex]}&apos;s Workout</h2>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Enter what you actually did for each set.
-      </p>
-      {items.length === 0 ? (
-        <div className="empty-state">
-          Nothing to log today — all exercises are skipped due to an active
-          injury.
-        </div>
-      ) : (
-        <LogForm
-          items={items}
-          clientId={user.id}
-          coachId={link.coach_id}
-          dayOfWeek={dayIndex}
-        />
+      {items.map((item) => {
+        const { min, max } = parseRange(item.repsTarget);
+        const rowSets = setsByRow[item.rowId];
+        const hasVideo = !!item.videoUrl;
+        const hasInstructions = !!item.instructions;
+        const infoOpen = openInfo[item.rowId];
+
+        return (
+          <div key={item.rowId} className="card" style={{ padding: 16, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+              {item.exerciseName}
+            </div>
+            <div className="muted" style={{ marginBottom: 8 }}>
+              Target: {item.repsTarget} reps
+            </div>
+
+            {(hasVideo || hasInstructions) && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                {hasInstructions && (
+                  <button
+                    onClick={() => toggleInfo(item.rowId, "instructions")}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid var(--line)",
+                      background: infoOpen === "instructions" ? "var(--ink)" : "var(--card)",
+                      color: infoOpen === "instructions" ? "var(--card)" : "var(--ink)",
+                    }}
+                  >
+                    Instructions
+                  </button>
+                )}
+                {hasVideo && (
+                  <a
+                    href={item.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid var(--line)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Watch video
+                  </a>
+                )}
+              </div>
+            )}
+
+            {infoOpen === "instructions" && hasInstructions && (
+              <div
+                className="muted"
+                style={{ fontSize: 13, marginBottom: 10, padding: 10, background: "var(--paper)", borderRadius: 6 }}
+              >
+                {item.instructions}
+              </div>
+            )}
+
+            {rowSets.map((s, idx) => {
+              const repsNum = parseInt(s.reps, 10);
+              const showEffort = !isNaN(repsNum) && repsNum >= max;
+              const showReason = !isNaN(repsNum) && repsNum > 0 && repsNum < min;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    borderTop: idx === 0 ? "none" : "1px solid var(--line)",
+                    paddingTop: idx === 0 ? 0 : 10,
+                    marginTop: idx === 0 ? 0 : 10,
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--steel)", marginBottom: 6 }}>
+                    Set {idx + 1}
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: "var(--steel)" }}>Weight</label>
+                      <input
+                        type="text"
+                        value={s.weight}
+                        onChange={(e) => updateSet(item.rowId, idx, "weight", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "6px 8px",
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: "var(--steel)" }}>Reps</label>
+                      <input
+                        type="number"
+                        value={s.reps}
+                        onChange={(e) => updateSet(item.rowId, idx, "reps", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "6px 8px",
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {showEffort && (
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: 11, color: "var(--steel)" }}>
+                        You hit the top of your range — how did it feel?
+                      </label>
+                      <select
+                        value={s.effort}
+                        onChange={(e) => updateSet(item.rowId, idx, "effort", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          fontSize: 13,
+                          background: "var(--card)",
+                          color: "var(--ink)",
+                          marginTop: 4,
+                        }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="very_easy">Very easy</option>
+                        <option value="easy">Easy</option>
+                        <option value="failure">Reached failure (couldn't do another rep)</option>
+                      </select>
+                    </div>
+                  )}
+                  {showReason && (
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: 11, color: "var(--steel)" }}>
+                        You didn't reach the minimum reps — why?
+                      </label>
+                      <select
+                        value={s.reason}
+                        onChange={(e) => updateSet(item.rowId, idx, "reason", e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          fontSize: 13,
+                          background: "var(--card)",
+                          color: "var(--ink)",
+                          marginTop: 4,
+                        }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="failure">Reached failure (couldn't do more reps)</option>
+                        <option value="pain">Pain or discomfort</option>
+                        <option value="form">Form broke down</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {error && (
+        <div style={{ color: "var(--rust)", fontSize: 13, marginBottom: 12 }}>{error}</div>
       )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={saving}
+        className="btn-primary"
+        style={{ width: "auto", padding: "10px 20px" }}
+      >
+        {saving ? "Saving..." : "Submit log"}
+      </button>
     </div>
   );
 }
