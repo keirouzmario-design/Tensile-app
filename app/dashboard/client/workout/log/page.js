@@ -183,22 +183,49 @@ export default async function LogDayPage({ searchParams }) {
     .filter((r) => r.day_of_week === dayIndex)
     .sort((a, b) => a.order_index - b.order_index);
 
-  const items = [];
+  const resolvedRows = [];
   for (const row of dayRows) {
     const display = resolveDisplay(row, usedThisWeek);
     if (display.skipped) continue;
-    items.push({
-      rowId: row.id,
-      exerciseId: display.exercise.id,
-      exerciseName: display.exercise.name,
-      sets: row.sets,
-      repsTarget: row.reps_target,
-      weight: row.weight || "",
-      equipmentType: display.exercise.equipment_type || "",
-      videoUrl: display.exercise.video_url || "",
-      instructions: display.exercise.instructions || "",
-    });
+    resolvedRows.push({ row, exercise: display.exercise });
   }
+
+  const exerciseIds = resolvedRows.map((r) => r.exercise.id);
+  let lastRepsByExercise = {};
+  if (exerciseIds.length > 0) {
+    const { data: recentLogs } = await supabase
+      .from("workout_log_sets")
+      .select("exercise_id, set_number, reps_logged, session_date")
+      .eq("client_id", user.id)
+      .in("exercise_id", exerciseIds)
+      .order("session_date", { ascending: false });
+
+    const latestSessionDateByExercise = {};
+    for (const log of recentLogs || []) {
+      if (!(log.exercise_id in latestSessionDateByExercise)) {
+        latestSessionDateByExercise[log.exercise_id] = log.session_date;
+      }
+    }
+    for (const log of recentLogs || []) {
+      if (log.session_date === latestSessionDateByExercise[log.exercise_id]) {
+        if (!lastRepsByExercise[log.exercise_id]) lastRepsByExercise[log.exercise_id] = {};
+        lastRepsByExercise[log.exercise_id][log.set_number] = log.reps_logged;
+      }
+    }
+  }
+
+  const items = resolvedRows.map(({ row, exercise }) => ({
+    rowId: row.id,
+    exerciseId: exercise.id,
+    exerciseName: exercise.name,
+    sets: row.sets,
+    repsTarget: row.reps_target,
+    weight: row.weight || "",
+    equipmentType: exercise.equipment_type || "",
+    videoUrl: exercise.video_url || "",
+    instructions: exercise.instructions || "",
+    lastReps: lastRepsByExercise[exercise.id] || {},
+  }));
 
   return (
     <div>
