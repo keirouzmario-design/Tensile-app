@@ -10,6 +10,7 @@ function getAccessStatus(packageEndDate) {
   return packageEndDate >= today ? "active" : "expired";
 }
 
+// The muscle(s) literally located at/in each body part.
 const CORE_MUSCLES = {
   chest: ["chest"], back: ["back"], shoulders: ["shoulders"], biceps: ["biceps"],
   triceps: ["triceps"], forearms: ["forearms"], lats: ["lats"], traps: ["traps"],
@@ -26,6 +27,9 @@ const CORE_MUSCLES = {
   diabetes_bloodsugar: [],
 };
 
+// The actual joint each body part corresponds to, if any -- used to match
+// against each exercise's joint_stress tags (which joint that movement
+// loads, regardless of which muscle it's officially "for").
 const BODY_PART_JOINT = {
   shoulders: "shoulder", shoulder_joint: "shoulder", rotator_cuff: "shoulder",
   collarbone: "shoulder", elbow: "elbow", wrist: "wrist", hand_fingers: "wrist",
@@ -85,30 +89,6 @@ export default async function ClientWorkoutView() {
     .select("*")
     .eq("client_id", user.id)
     .eq("active", true);
-
-  const { data: adjustments } = await supabase
-    .from("workout_adjustments")
-    .select("exercise_id, recommendation, created_at")
-    .eq("client_id", user.id)
-    .order("created_at", { ascending: false });
-
-  const latestRecommendation = {};
-  for (const adj of adjustments || []) {
-    if (!(adj.exercise_id in latestRecommendation)) {
-      latestRecommendation[adj.exercise_id] = adj.recommendation;
-    }
-  }
-
-  const RECOMMENDATION_LABELS = {
-    increase: "↑ Increase weight next time",
-    hold: "→ Hold steady",
-    deload: "↓ Discuss with your coach",
-  };
-  const RECOMMENDATION_COLORS = {
-    increase: "var(--moss-deep)",
-    hold: "var(--steel)",
-    deload: "var(--rust)",
-  };
 
   const activeInjuries = injuries || [];
   const hasGlobalRest = activeInjuries.some((i) => i.resolved_action === "global_rest");
@@ -208,6 +188,9 @@ export default async function ClientWorkoutView() {
     return { exercise: ex };
   }
 
+  // Tracks every exercise id used anywhere in the week -- seeded with the
+  // plan's original exercises so a replacement never collides with an
+  // exercise already assigned on a different day.
   const usedThisWeek = new Set(
     (plan || []).map((r) => r.exercises?.id).filter(Boolean)
   );
@@ -276,18 +259,6 @@ export default async function ClientWorkoutView() {
                         {display.caution && (
                           <div style={{ fontSize: 12, color: "var(--rust)", fontWeight: 700, marginTop: 2 }}>
                             Use caution — no gentler alternative found
-                          </div>
-                        )}
-                        {display.exercise?.id && latestRecommendation[display.exercise.id] && (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: RECOMMENDATION_COLORS[latestRecommendation[display.exercise.id]],
-                              marginTop: 2,
-                            }}
-                          >
-                            {RECOMMENDATION_LABELS[latestRecommendation[display.exercise.id]]}
                           </div>
                         )}
                       </div>
