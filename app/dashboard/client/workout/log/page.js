@@ -75,7 +75,7 @@ export default async function LogDayPage({ searchParams }) {
 
   const { data: plan } = await supabase
     .from("workout_plan_exercises")
-    .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress)")
+    .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions)")
     .eq("client_id", user.id);
 
   const { data: injuries } = await supabase
@@ -122,7 +122,7 @@ export default async function LogDayPage({ searchParams }) {
   if (needExerciseList) {
     const { data } = await supabase
       .from("exercises")
-      .select("id, name, muscle_groups, equipment_type, joint_stress");
+      .select("id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions");
     allExercises = data || [];
   }
 
@@ -194,6 +194,9 @@ export default async function LogDayPage({ searchParams }) {
       sets: row.sets,
       repsTarget: row.reps_target,
       weight: row.weight || "",
+      equipmentType: display.exercise.equipment_type || "",
+      videoUrl: display.exercise.video_url || "",
+      instructions: display.exercise.instructions || "",
     });
   }
 
