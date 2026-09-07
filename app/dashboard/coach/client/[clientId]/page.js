@@ -3,6 +3,32 @@ import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/app/sign-out-button";
 import WorkoutEditor from "./workout-editor";
 
+const BODY_PART_LABELS = {
+  chest: "Chest", back: "Back (muscle)", shoulders: "Shoulders", biceps: "Biceps",
+  triceps: "Triceps", forearms: "Forearms", lats: "Lats", traps: "Traps",
+  quads: "Quads", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves",
+  core: "Core / abs", obliques: "Obliques", hip_flexors: "Hip flexors",
+  adductors: "Adductors (inner thigh)", abductors: "Abductors (outer hip)",
+  rotator_cuff: "Rotator cuff", neck: "Neck",
+  upper_back_spine: "Upper back / spine (joint)", lower_back_spine: "Lower back / spine (joint)",
+  shoulder_joint: "Shoulder joint", elbow: "Elbow", wrist: "Wrist",
+  hip: "Hip", knee: "Knee", ankle: "Ankle", foot: "Foot",
+  jaw_tmj: "Jaw / TMJ", ribs_sternum: "Ribs / sternum", collarbone: "Collarbone",
+  hand_fingers: "Hand / fingers", toes: "Toes", achilles_tendon: "Achilles tendon",
+  groin: "Groin", tailbone: "Tailbone", cardiovascular: "Heart / cardiovascular",
+  respiratory: "Breathing / respiratory", pregnancy: "Pregnancy",
+  general: "General illness / whole-body recovery",
+  neurological_balance: "Neurological / balance issues", digestive: "Digestive / GI",
+  diabetes_bloodsugar: "Diabetes / blood sugar",
+};
+
+const ACTION_LABELS = {
+  global_rest: "Full rest — whole workout paused",
+  local_rest: "Avoiding exercises for this area",
+  local_modify: "Using modified/gentler exercises",
+  no_restriction: "No restrictions",
+};
+
 export default async function ClientWorkoutPage({ params }) {
   const { clientId } = params;
   const supabase = createClient();
@@ -23,9 +49,15 @@ export default async function ClientWorkoutPage({ params }) {
 
   const { data: clientProfile } = await supabase
     .from("profiles")
-    .select("full_name, injuries")
+    .select("full_name")
     .eq("id", clientId)
     .single();
+
+  const { data: activeInjuries } = await supabase
+    .from("client_injuries")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("active", true);
 
   const { data: plan } = await supabase
     .from("workout_plan_exercises")
@@ -49,14 +81,23 @@ export default async function ClientWorkoutPage({ params }) {
         <a href="/dashboard/coach" className="muted" style={{ textDecoration: "none" }}>
           ← Back to clients
         </a>
-        <h1 style={{ fontSize: 22, marginTop: 8, marginBottom: 12 }}>
-          {clientProfile?.full_name}&apos;s Workout Plan
-        </h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 8, marginBottom: 12 }}>
+          <h1 style={{ fontSize: 22 }}>
+            {clientProfile?.full_name}&apos;s Workout Plan
+          </h1>
+          <a
+            href={`/dashboard/coach/client/${clientId}/report`}
+            style={{ fontSize: 13, fontWeight: 700, color: "var(--moss-deep)", whiteSpace: "nowrap" }}
+          >
+            View weekly report →
+          </a>
+        </div>
 
-        {clientProfile?.injuries && (
+        {(activeInjuries || []).map((inj) => (
           <div
+            key={inj.id}
             style={{
-              marginBottom: 20,
+              marginBottom: 12,
               fontSize: 13,
               color: "var(--amber)",
               background: "#F3E9DC",
@@ -64,9 +105,12 @@ export default async function ClientWorkoutPage({ params }) {
               padding: "10px 14px",
             }}
           >
-            Injury note: {clientProfile.injuries}
+            <div style={{ fontWeight: 700 }}>
+              {BODY_PART_LABELS[inj.body_part] || inj.body_part} — {inj.injury_type}
+            </div>
+            <div>{ACTION_LABELS[inj.resolved_action] || inj.resolved_action}</div>
           </div>
-        )}
+        ))}
 
         <WorkoutEditor
           clientId={clientId}
