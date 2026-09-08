@@ -131,7 +131,8 @@ export default async function ClientWorkoutView() {
   if (needExerciseList) {
     const { data } = await supabase
       .from("exercises")
-      .select("id, name, muscle_groups, equipment_type, joint_stress");
+      .select("id, name, muscle_groups, equipment_type, joint_stress")
+      .order("id", { ascending: true });
     allExercises = data || [];
   }
 
