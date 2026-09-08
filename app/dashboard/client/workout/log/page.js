@@ -123,7 +123,8 @@ export default async function LogDayPage({ searchParams }) {
   if (needExerciseList) {
     const { data } = await supabase
       .from("exercises")
-      .select("id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions");
+      .select("id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions")
+      .order("id", { ascending: true });
     allExercises = data || [];
   }
 
