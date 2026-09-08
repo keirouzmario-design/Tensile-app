@@ -196,10 +196,11 @@ export default async function LogDayPage({ searchParams }) {
   if (exerciseIds.length > 0) {
     const { data: recentLogs } = await supabase
       .from("workout_log_sets")
-      .select("exercise_id, set_number, reps_logged, effort, shortfall_reason, session_date")
+      .select("exercise_id, set_number, reps_logged, effort, shortfall_reason, session_date, created_at")
       .eq("client_id", user.id)
       .in("exercise_id", exerciseIds)
-      .order("session_date", { ascending: false });
+      .order("session_date", { ascending: false })
+      .order("created_at", { ascending: false });
 
     const latestSessionDateByExercise = {};
     for (const log of recentLogs || []) {
@@ -207,15 +208,22 @@ export default async function LogDayPage({ searchParams }) {
         latestSessionDateByExercise[log.exercise_id] = log.session_date;
       }
     }
+
+    // Rows are ordered newest-first, so the FIRST row seen for a given
+    // (exercise, set number) is from the most recent submission -- ignore
+    // any later (older) rows for that same key, even if they share a date.
+    const seenSetKey = new Set();
     for (const log of recentLogs || []) {
-      if (log.session_date === latestSessionDateByExercise[log.exercise_id]) {
-        if (!lastSetDataByExercise[log.exercise_id]) lastSetDataByExercise[log.exercise_id] = {};
-        lastSetDataByExercise[log.exercise_id][log.set_number] = {
-          reps: log.reps_logged,
-          effort: log.effort,
-          reason: log.shortfall_reason,
-        };
-      }
+      if (log.session_date !== latestSessionDateByExercise[log.exercise_id]) continue;
+      const key = `${log.exercise_id}:${log.set_number}`;
+      if (seenSetKey.has(key)) continue;
+      seenSetKey.add(key);
+      if (!lastSetDataByExercise[log.exercise_id]) lastSetDataByExercise[log.exercise_id] = {};
+      lastSetDataByExercise[log.exercise_id][log.set_number] = {
+        reps: log.reps_logged,
+        effort: log.effort,
+        reason: log.shortfall_reason,
+      };
     }
   }
 
