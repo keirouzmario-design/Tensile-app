@@ -1,9 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -220,12 +216,12 @@ export default async function ClientWorkoutView() {
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--steel)" }}>
                 {label.toUpperCase()}
               </div>
-              <Link
+              <a
                 href={`/dashboard/client/workout/log?day=${idx}`}
                 style={{ fontSize: 12, fontWeight: 700, color: "var(--moss-deep)" }}
               >
                 Log this day →
-              </Link>
+              </a>
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               {rows.map((r, i) => {
