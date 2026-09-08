@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import LogForm from "./log-form";
 import LogErrorBoundary from "./error-boundary";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function getAccessStatus(packageEndDate) {
