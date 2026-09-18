@@ -47,9 +47,6 @@ function parseWeightValue(weightStr) {
   return { value: parseFloat(match[1]), suffix: match[3] || "" };
 }
 
-// Picks the weight actually used this session (first non-empty set) and
-// applies the recommendation to THAT, rather than to the old plan weight --
-// this is what lets a first-ever log establish a real starting weight.
 function pickSessionWeight(rowSets) {
   for (const s of rowSets) {
     if (s.weight && s.weight.trim() !== "") return s.weight.trim();
@@ -79,12 +76,12 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
     const startingWeight =
       item.weight || STARTING_WEIGHT_BY_EQUIPMENT[item.equipmentType] || "";
     initialState[item.rowId] = Array.from({ length: item.sets }, (_, idx) => {
-      const lastRep = item.lastReps ? item.lastReps[idx + 1] : undefined;
+      const last = item.lastSets ? item.lastSets[idx + 1] : undefined;
       return {
         weight: startingWeight,
-        reps: lastRep != null ? String(lastRep) : "",
-        effort: "",
-        reason: "",
+        reps: last && last.reps != null ? String(last.reps) : "",
+        effort: last && last.effort ? last.effort : "",
+        reason: last && last.reason ? last.reason : "",
       };
     });
   });
