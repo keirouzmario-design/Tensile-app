@@ -213,9 +213,6 @@ export default async function LogDayPage({ searchParams }) {
       }
     }
 
-    // Rows are ordered newest-first, so the FIRST row seen for a given
-    // (exercise, set number) is from the most recent submission -- ignore
-    // any later (older) rows for that same key, even if they share a date.
     const seenSetKey = new Set();
     for (const log of recentLogs || []) {
       if (log.session_date !== latestSessionDateByExercise[log.exercise_id]) continue;
@@ -250,6 +247,9 @@ export default async function LogDayPage({ searchParams }) {
       <p className="muted" style={{ marginBottom: 16 }}>
         Enter what you actually did for each set.
       </p>
+      <div style={{ fontSize: 11, fontFamily: "monospace", background: "#eee", padding: 10, marginBottom: 16, whiteSpace: "pre-wrap", color: "#000" }}>
+        DEBUG: {JSON.stringify(items.map(i => ({ id: i.exerciseId, name: i.exerciseName, weight: i.weight, lastSets: i.lastSets })), null, 2)}
+      </div>
       {items.length === 0 ? (
         <div className="empty-state">
           Nothing to log today — all exercises are skipped due to an active
