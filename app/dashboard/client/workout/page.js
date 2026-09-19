@@ -227,9 +227,12 @@ export default async function ClientWorkoutView() {
                   >
                     {display.skipped ? (
                       <div>
-                        <div style={{ fontWeight: 600, color: "var(--steel)" }}>
-                          {display.original?.name}
-                        </div>
+                        <ExerciseItem
+                          name={display.original?.name}
+                          gifUrl={display.original?.gif_url}
+                          instructions={display.original?.instructions}
+                          videoUrl={display.original?.video_url}
+                        />
                         <div style={{ fontSize: 12, color: "var(--rust)", fontWeight: 700 }}>
                           Skipped — no safe alternative available for your injury
                         </div>
