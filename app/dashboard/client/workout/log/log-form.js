@@ -67,6 +67,56 @@ function computeNextWeight(sessionWeight, recommendation) {
   return parsed.suffix ? `${rounded} ${parsed.suffix}` : `${rounded}`;
 }
 
+async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets) {
+  let best = null;
+  for (const s of rowSets) {
+    const parsed = parseWeightValue(s.weight);
+    const reps = parseInt(s.reps, 10);
+    if (parsed && !isNaN(reps)) {
+      if (!best || parsed.value > best.value) {
+        best = { value: parsed.value, suffix: parsed.suffix, reps };
+      }
+    }
+  }
+  if (!best) return null;
+
+  const { data: existing } = await supabase
+    .from("personal_records")
+    .select("id, weight_value")
+    .eq("client_id", clientId)
+    .eq("exercise_id", exerciseId)
+    .maybeSingle();
+
+  if (existing && best.value <= existing.weight_value) return null;
+
+  const weightDisplay = best.suffix ? `${best.value} ${best.suffix}` : `${best.value}`;
+  const today = new Date().toISOString().split("T")[0];
+
+  if (existing) {
+    await supabase
+      .from("personal_records")
+      .update({
+        weight_value: best.value,
+        weight_display: weightDisplay,
+        reps: best.reps,
+        session_date: today,
+      })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("personal_records").insert({
+      client_id: clientId,
+      coach_id: coachId,
+      exercise_id: exerciseId,
+      weight_value: best.value,
+      weight_display: weightDisplay,
+      reps: best.reps,
+      session_date: today,
+    });
+  }
+
+  return weightDisplay;
+}
+
 export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
   const supabase = createClient();
   const router = useRouter();
@@ -90,6 +140,7 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
   const [openInfo, setOpenInfo] = useState({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [newPRs, setNewPRs] = useState([]);
   const [error, setError] = useState("");
 
   function updateSet(rowId, setIndex, field, value) {
@@ -198,6 +249,22 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
         .eq("id", u.rowId);
     }
 
+    const prResults = [];
+    for (const item of items) {
+      const rowSets = setsByRow[item.rowId];
+      const prWeight = await checkAndRecordPR(
+        supabase,
+        clientId,
+        coachId,
+        item.exerciseId,
+        rowSets
+      );
+      if (prWeight) {
+        prResults.push({ name: item.exerciseName, weight: prWeight });
+      }
+    }
+
+    setNewPRs(prResults);
     setSaving(false);
     setDone(true);
     router.refresh();
@@ -206,10 +273,21 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
   if (done) {
     return (
       <div className="empty-state">
-        Logged! Great work.{" "}
-        <a href="/dashboard/client/workout" style={{ color: "var(--moss-deep)", fontWeight: 700 }}>
-          Back to your plan
-        </a>
+        Logged! Great work.
+        {newPRs.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {newPRs.map((pr, i) => (
+              <div key={i} style={{ fontWeight: 700, color: "var(--moss-deep)", marginBottom: 4 }}>
+                🎉 New PR: {pr.name} — {pr.weight}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <a href="/dashboard/client/workout" style={{ color: "var(--moss-deep)", fontWeight: 700 }}>
+            Back to your plan
+          </a>
+        </div>
       </div>
     );
   }
