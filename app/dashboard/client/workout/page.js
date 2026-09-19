@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import ExerciseItem from "./exercise-item";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -76,7 +77,7 @@ export default async function ClientWorkoutView() {
 
   const { data: plan } = await supabase
     .from("workout_plan_exercises")
-    .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress)")
+    .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress, gif_url, instructions, video_url)")
     .eq("client_id", user.id);
 
   const { data: injuries } = await supabase
@@ -126,7 +127,7 @@ export default async function ClientWorkoutView() {
   if (needExerciseList) {
     const { data } = await supabase
       .from("exercises")
-      .select("id, name, muscle_groups, equipment_type, joint_stress")
+      .select("id, name, muscle_groups, equipment_type, joint_stress, gif_url, instructions, video_url")
       .order("id", { ascending: true });
     allExercises = data || [];
   }
@@ -235,7 +236,12 @@ export default async function ClientWorkoutView() {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ fontWeight: 600 }}>{display.exercise?.name}</div>
+                        <ExerciseItem
+                          name={display.exercise?.name}
+                          gifUrl={display.exercise?.gif_url}
+                          instructions={display.exercise?.instructions}
+                          videoUrl={display.exercise?.video_url}
+                        />
                         <div className="muted">
                           {r.sets} sets × {r.reps_target} {r.weight ? `@ ${r.weight}` : ""}
                         </div>
