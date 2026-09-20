@@ -14,18 +14,30 @@ const DAYS = [
   { label: "Sun", value: 7 },
 ];
 
-export default function WorkoutEditor({ clientId, coachId, initialPlan, allExercises }) {
+export default function WorkoutEditor({
+  clientId,
+  coachId,
+  program,
+  initialWeeks,
+  initialProgramExercises,
+  allExercises,
+}) {
   const supabase = createClient();
   const router = useRouter();
+  const [activeWeekId, setActiveWeekId] = useState(initialWeeks[0]?.id || null);
   const [activeDay, setActiveDay] = useState(1);
   const [pickerFor, setPickerFor] = useState(null);
   const [search, setSearch] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [muscleFilter, setMuscleFilter] = useState("all");
   const [savingId, setSavingId] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState("");
 
-  const dayRows = initialPlan
-    .filter((r) => r.day_of_week === activeDay)
+  const activeWeek = initialWeeks.find((w) => w.id === activeWeekId);
+
+  const dayRows = initialProgramExercises
+    .filter((r) => r.program_week_id === activeWeekId && r.day_of_week === activeDay)
     .sort((a, b) => a.order_index - b.order_index);
 
   const equipmentOptions = [
@@ -58,21 +70,21 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
 
   async function updateRow(id, fields) {
     setSavingId(id);
-    await supabase.from("workout_plan_exercises").update(fields).eq("id", id);
+    await supabase.from("program_exercises").update(fields).eq("id", id);
     setSavingId(null);
     router.refresh();
   }
 
   async function deleteRow(id) {
-    await supabase.from("workout_plan_exercises").delete().eq("id", id);
+    await supabase.from("program_exercises").delete().eq("id", id);
     router.refresh();
   }
 
   async function addExercise(exerciseId) {
+    if (!activeWeekId) return;
     const nextOrder = dayRows.length;
-    await supabase.from("workout_plan_exercises").insert({
-      client_id: clientId,
-      coach_id: coachId,
+    await supabase.from("program_exercises").insert({
+      program_week_id: activeWeekId,
       day_of_week: activeDay,
       exercise_id: exerciseId,
       sets: 3,
@@ -87,6 +99,20 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
   async function swapExercise(rowId, newExerciseId) {
     await updateRow(rowId, { exercise_id: newExerciseId });
     closePicker();
+  }
+
+  async function generateCalendar() {
+    setGenerating(true);
+    setGenerateMessage("");
+    const { error } = await supabase.rpc("generate_program_workouts", {
+      p_program_id: program.id,
+    });
+    setGenerating(false);
+    if (error) {
+      setGenerateMessage(`Error: ${error.message}`);
+    } else {
+      setGenerateMessage("Calendar generated — client can now see this program.");
+    }
   }
 
   function swapCandidates(currentExercise) {
@@ -117,8 +143,49 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
     color: "var(--ink)",
   };
 
+  const smallInputStyle = {
+    width: "100%",
+    padding: "6px 8px",
+    border: "1px solid var(--line)",
+    borderRadius: 6,
+    fontSize: 13,
+  };
+
   return (
     <div>
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>{program.name}</div>
+        {program.description && (
+          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+            {program.description}
+          </div>
+        )}
+        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          Starts {program.start_date} · {program.duration_weeks} weeks
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+        {initialWeeks.map((week) => (
+          <button
+            key={week.id}
+            onClick={() => setActiveWeekId(week.id)}
+            style={{
+              border: "1px solid var(--line)",
+              background: activeWeekId === week.id ? "var(--moss-deep)" : "var(--card)",
+              color: activeWeekId === week.id ? "var(--card)" : "var(--ink)",
+              borderRadius: 6,
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Week {week.week_number}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
         {DAYS.map((day) => (
           <button
@@ -142,7 +209,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
 
       {dayRows.length === 0 && (
         <div className="empty-state" style={{ marginBottom: 16 }}>
-          No exercises assigned for this day yet.
+          No exercises assigned for {activeWeek ? `Week ${activeWeek.week_number}` : "this week"} on this day yet.
         </div>
       )}
 
@@ -236,13 +303,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                   type="number"
                   defaultValue={row.sets}
                   onBlur={(e) => updateRow(row.id, { sets: parseInt(e.target.value) || 0 })}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    border: "1px solid var(--line)",
-                    borderRadius: 6,
-                    fontSize: 13,
-                  }}
+                  style={smallInputStyle}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -251,13 +312,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                   type="text"
                   defaultValue={row.reps_target}
                   onBlur={(e) => updateRow(row.id, { reps_target: e.target.value })}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    border: "1px solid var(--line)",
-                    borderRadius: 6,
-                    fontSize: 13,
-                  }}
+                  style={smallInputStyle}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -266,13 +321,52 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
                   type="text"
                   defaultValue={row.weight}
                   onBlur={(e) => updateRow(row.id, { weight: e.target.value })}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    border: "1px solid var(--line)",
-                    borderRadius: 6,
-                    fontSize: 13,
-                  }}
+                  style={smallInputStyle}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: "var(--steel)" }}>RPE</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  defaultValue={row.target_rpe ?? ""}
+                  onBlur={(e) =>
+                    updateRow(row.id, {
+                      target_rpe: e.target.value ? parseFloat(e.target.value) : null,
+                    })
+                  }
+                  style={smallInputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: "var(--steel)" }}>% 1RM</label>
+                <input
+                  type="number"
+                  step="1"
+                  defaultValue={row.target_percentage ?? ""}
+                  onBlur={(e) =>
+                    updateRow(row.id, {
+                      target_percentage: e.target.value ? parseFloat(e.target.value) : null,
+                    })
+                  }
+                  style={smallInputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: "var(--steel)" }}>Rest (sec)</label>
+                <input
+                  type="number"
+                  step="5"
+                  defaultValue={row.rest_seconds ?? ""}
+                  onBlur={(e) =>
+                    updateRow(row.id, {
+                      rest_seconds: e.target.value ? parseInt(e.target.value, 10) : null,
+                    })
+                  }
+                  style={smallInputStyle}
                 />
               </div>
             </div>
@@ -298,7 +392,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
         );
       })}
 
-      <div className="card" style={{ padding: 16 }}>
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Add an exercise</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <select
@@ -369,6 +463,36 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+          Push to client&apos;s calendar
+        </div>
+        <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+          Generates dated workouts from this program. Safe to re-run after edits —
+          it replaces previously generated entries for this program.
+        </div>
+        <button
+          onClick={generateCalendar}
+          disabled={generating}
+          style={{
+            border: "none",
+            background: "var(--ink)",
+            color: "var(--card)",
+            borderRadius: 6,
+            padding: "10px 16px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: generating ? "default" : "pointer",
+            opacity: generating ? 0.6 : 1,
+          }}
+        >
+          {generating ? "Generating..." : "Generate Calendar"}
+        </button>
+        {generateMessage && (
+          <div style={{ fontSize: 13, marginTop: 10 }}>{generateMessage}</div>
         )}
       </div>
     </div>
