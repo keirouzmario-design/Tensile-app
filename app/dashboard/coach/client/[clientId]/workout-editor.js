@@ -4,12 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS = [
+  { label: "Mon", value: 1 },
+  { label: "Tue", value: 2 },
+  { label: "Wed", value: 3 },
+  { label: "Thu", value: 4 },
+  { label: "Fri", value: 5 },
+  { label: "Sat", value: 6 },
+  { label: "Sun", value: 7 },
+];
 
 export default function WorkoutEditor({ clientId, coachId, initialPlan, allExercises }) {
   const supabase = createClient();
   const router = useRouter();
-  const [activeDay, setActiveDay] = useState(0);
+  const [activeDay, setActiveDay] = useState(1);
   const [pickerFor, setPickerFor] = useState(null);
   const [search, setSearch] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
@@ -112,14 +120,14 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
   return (
     <div>
       <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>
-        {DAYS.map((label, idx) => (
+        {DAYS.map((day) => (
           <button
-            key={idx}
-            onClick={() => setActiveDay(idx)}
+            key={day.value}
+            onClick={() => setActiveDay(day.value)}
             style={{
               border: "1px solid var(--line)",
-              background: activeDay === idx ? "var(--ink)" : "var(--card)",
-              color: activeDay === idx ? "var(--card)" : "var(--ink)",
+              background: activeDay === day.value ? "var(--ink)" : "var(--card)",
+              color: activeDay === day.value ? "var(--card)" : "var(--ink)",
               borderRadius: 6,
               padding: "6px 12px",
               fontSize: 13,
@@ -127,7 +135,7 @@ export default function WorkoutEditor({ clientId, coachId, initialPlan, allExerc
               cursor: "pointer",
             }}
           >
-            {label}
+            {day.label}
           </button>
         ))}
       </div>
