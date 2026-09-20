@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/app/sign-out-button";
 import WorkoutEditor from "./workout-editor";
+import ProgramSetup from "./program-setup";
 
 const BODY_PART_LABELS = {
   chest: "Chest", back: "Back (muscle)", shoulders: "Shoulders", biceps: "Biceps",
@@ -59,11 +60,37 @@ export default async function ClientWorkoutPage({ params }) {
     .eq("client_id", clientId)
     .eq("active", true);
 
-  const { data: plan } = await supabase
-    .from("workout_plan_exercises")
+  // Fetch the client's current active program, if one exists
+  const { data: program } = await supabase
+    .from("programs")
     .select("*")
     .eq("client_id", clientId)
-    .eq("coach_id", user.id);
+    .eq("coach_id", user.id)
+    .eq("active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let weeks = [];
+  let programExercises = [];
+
+  if (program) {
+    const { data: weeksData } = await supabase
+      .from("program_weeks")
+      .select("*")
+      .eq("program_id", program.id)
+      .order("week_number", { ascending: true });
+    weeks = weeksData || [];
+
+    const weekIds = weeks.map((w) => w.id);
+    if (weekIds.length > 0) {
+      const { data: exercisesData } = await supabase
+        .from("program_exercises")
+        .select("*")
+        .in("program_week_id", weekIds);
+      programExercises = exercisesData || [];
+    }
+  }
 
   const { data: allExercises } = await supabase
     .from("exercises")
@@ -112,12 +139,18 @@ export default async function ClientWorkoutPage({ params }) {
           </div>
         ))}
 
-        <WorkoutEditor
-          clientId={clientId}
-          coachId={user.id}
-          initialPlan={plan || []}
-          allExercises={allExercises || []}
-        />
+        {!program ? (
+          <ProgramSetup clientId={clientId} coachId={user.id} />
+        ) : (
+          <WorkoutEditor
+            clientId={clientId}
+            coachId={user.id}
+            program={program}
+            initialWeeks={weeks}
+            initialProgramExercises={programExercises}
+            allExercises={allExercises || []}
+          />
+        )}
       </div>
     </div>
   );
