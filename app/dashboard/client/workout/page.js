@@ -191,7 +191,22 @@ export default async function ClientWorkoutView() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, marginBottom: 12 }}>Your Workout Plan</h2>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <h2 style={{ fontSize: 18 }}>Your Workout Plan</h2>
+        <a
+          href="/dashboard/client/workout/progress"
+          style={{ fontSize: 12, fontWeight: 700, color: "var(--moss-deep)" }}
+        >
+          View progress →
+        </a>
+      </div>
       {DAYS.map((label, idx) => {
         const rows = (plan || [])
           .filter((r) => r.day_of_week === idx)
