@@ -67,10 +67,9 @@ function computeNextWeight(sessionWeight, recommendation) {
   return parsed.suffix ? `${rounded} ${parsed.suffix}` : `${rounded}`;
 }
 
-// isodow: 1=Monday..7=Sunday, matching our day_of_week convention
 function isoDayOfWeek(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
-  const jsDay = d.getDay(); // 0=Sun..6=Sat
+  const jsDay = d.getDay();
   return jsDay === 0 ? 7 : jsDay;
 }
 
@@ -148,6 +147,7 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
   const [done, setDone] = useState(false);
   const [newPRs, setNewPRs] = useState([]);
   const [error, setError] = useState("");
+  const [existingLogWarning, setExistingLogWarning] = useState(false);
 
   function updateSet(rowId, setIndex, field, value) {
     setSetsByRow((prev) => {
@@ -164,26 +164,67 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
     }));
   }
 
-  async function handleSubmit() {
-    setError("");
-
+  function validateFields() {
     for (const item of items) {
       const { min } = parseRange(item.repsTarget);
       const rowSets = setsByRow[item.rowId];
       for (const s of rowSets) {
         const repsNum = parseInt(s.reps, 10);
         if (s.reps === "" || isNaN(repsNum)) {
-          setError(`Please enter reps for every set of ${item.exerciseName}.`);
-          return;
+          return `Please enter reps for every set of ${item.exerciseName}.`;
         }
         if (repsNum < min && !s.reason) {
-          setError(`Please select a reason for the missed reps on ${item.exerciseName}.`);
-          return;
+          return `Please select a reason for the missed reps on ${item.exerciseName}.`;
         }
       }
     }
+    return null;
+  }
 
+  async function handleSubmit(force = false) {
+    setError("");
+
+    const validationError = validateFields();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const exerciseIds = items.map((item) => item.exerciseId);
+
+    if (!force) {
+      const { data: existingLogs } = await supabase
+        .from("workout_log_sets")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("session_date", sessionDate)
+        .in("exercise_id", exerciseIds)
+        .limit(1);
+
+      if (existingLogs && existingLogs.length > 0) {
+        setExistingLogWarning(true);
+        return;
+      }
+    }
+
+    setExistingLogWarning(false);
     setSaving(true);
+
+    // Overwrite mode: clear any previous entries for this client/date/exercises
+    // before inserting fresh ones, so resubmits never duplicate rows.
+    await supabase
+      .from("workout_log_sets")
+      .delete()
+      .eq("client_id", clientId)
+      .eq("session_date", sessionDate)
+      .in("exercise_id", exerciseIds);
+
+    await supabase
+      .from("workout_adjustments")
+      .delete()
+      .eq("client_id", clientId)
+      .eq("session_date", sessionDate)
+      .in("exercise_id", exerciseIds);
 
     const logRows = [];
     const adjustmentRows = [];
@@ -477,12 +518,47 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
         );
       })}
 
+      {existingLogWarning && (
+        <div
+          className="card"
+          style={{
+            padding: 16,
+            marginBottom: 12,
+            borderColor: "var(--amber)",
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--amber)", marginBottom: 6 }}>
+            You already logged this day
+          </div>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+            Submitting again will replace your previous entries for this day
+            with what's on this screen now.
+          </div>
+          <button
+            onClick={() => handleSubmit(true)}
+            disabled={saving}
+            style={{
+              border: "none",
+              background: "var(--amber)",
+              color: "var(--card)",
+              borderRadius: 6,
+              padding: "8px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: saving ? "default" : "pointer",
+            }}
+          >
+            {saving ? "Saving..." : "Overwrite and submit"}
+          </button>
+        </div>
+      )}
+
       {error && (
         <div style={{ color: "var(--rust)", fontSize: 13, marginBottom: 12 }}>{error}</div>
       )}
 
       <button
-        onClick={handleSubmit}
+        onClick={() => handleSubmit(false)}
         disabled={saving}
         className="btn-primary"
         style={{ width: "auto", padding: "10px 20px" }}
