@@ -67,7 +67,14 @@ function computeNextWeight(sessionWeight, recommendation) {
   return parsed.suffix ? `${rounded} ${parsed.suffix}` : `${rounded}`;
 }
 
-async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets) {
+// isodow: 1=Monday..7=Sunday, matching our day_of_week convention
+function isoDayOfWeek(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const jsDay = d.getDay(); // 0=Sun..6=Sat
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets, sessionDate) {
   let best = null;
   for (const s of rowSets) {
     const parsed = parseWeightValue(s.weight);
@@ -90,7 +97,6 @@ async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets
   if (existing && best.value <= existing.weight_value) return null;
 
   const weightDisplay = best.suffix ? `${best.value} ${best.suffix}` : `${best.value}`;
-  const today = new Date().toISOString().split("T")[0];
 
   if (existing) {
     await supabase
@@ -99,7 +105,7 @@ async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets
         weight_value: best.value,
         weight_display: weightDisplay,
         reps: best.reps,
-        session_date: today,
+        session_date: sessionDate,
       })
       .eq("id", existing.id);
   } else {
@@ -110,14 +116,14 @@ async function checkAndRecordPR(supabase, clientId, coachId, exerciseId, rowSets
       weight_value: best.value,
       weight_display: weightDisplay,
       reps: best.reps,
-      session_date: today,
+      session_date: sessionDate,
     });
   }
 
   return weightDisplay;
 }
 
-export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
+export default function LogForm({ items, clientId, coachId, sessionDate }) {
   const supabase = createClient();
   const router = useRouter();
 
@@ -182,6 +188,7 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
     const logRows = [];
     const adjustmentRows = [];
     const weightUpdates = [];
+    const dayOfWeek = isoDayOfWeek(sessionDate);
 
     for (const item of items) {
       const { min, max } = parseRange(item.repsTarget);
@@ -204,6 +211,7 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
           coach_id: coachId,
           exercise_id: item.exerciseId,
           day_of_week: dayOfWeek,
+          session_date: sessionDate,
           set_number: s.set_number,
           reps_logged: s.reps,
           weight_logged: s.weight,
@@ -222,6 +230,7 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
         client_id: clientId,
         coach_id: coachId,
         exercise_id: item.exerciseId,
+        session_date: sessionDate,
         recommendation,
         flagged,
       });
@@ -257,7 +266,8 @@ export default function LogForm({ items, clientId, coachId, dayOfWeek }) {
         clientId,
         coachId,
         item.exerciseId,
-        rowSets
+        rowSets,
+        sessionDate
       );
       if (prWeight) {
         prResults.push({ name: item.exerciseName, weight: prWeight });
