@@ -18,7 +18,6 @@ function startOfWeek() {
   return start;
 }
 
-
 export default async function ProgressPage() {
   const supabase = createClient();
   const {
@@ -49,6 +48,7 @@ export default async function ProgressPage() {
     const vol = parsed.value * (log.reps_logged || 0);
     if (!volumeByExercise[log.exercise_id]) {
       volumeByExercise[log.exercise_id] = {
+        exerciseId: log.exercise_id,
         name: log.exercises?.name,
         total: 0,
         suffix: parsed.suffix,
@@ -57,6 +57,14 @@ export default async function ProgressPage() {
     volumeByExercise[log.exercise_id].total += vol;
   }
   const volumeList = Object.values(volumeByExercise).sort((a, b) => b.total - a.total);
+
+  const rowLinkStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    textDecoration: "none",
+    color: "inherit",
+  };
 
   return (
     <div>
@@ -75,19 +83,20 @@ export default async function ProgressPage() {
           </div>
         )}
         {(prs || []).map((pr, i) => (
-          <div
+          <a
             key={pr.id}
+            href={`/dashboard/client/workout/progress/${pr.exercise_id}`}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              ...rowLinkStyle,
               paddingTop: i === 0 ? 0 : 8,
               marginTop: i === 0 ? 0 : 8,
               borderTop: i === 0 ? "none" : "1px solid var(--line)",
             }}
           >
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{pr.exercises?.name}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--moss-deep)" }}>
+                {pr.exercises?.name}
+              </div>
               <div className="muted" style={{ fontSize: 12 }}>
                 {pr.reps} reps · {pr.session_date}
               </div>
@@ -95,7 +104,7 @@ export default async function ProgressPage() {
             <div style={{ fontWeight: 700, color: "var(--moss-deep)" }}>
               {pr.weight_display}
             </div>
-          </div>
+          </a>
         ))}
       </div>
 
@@ -109,22 +118,22 @@ export default async function ProgressPage() {
           </div>
         )}
         {volumeList.map((v, i) => (
-          <div
-            key={i}
+          <a
+            key={v.exerciseId}
+            href={`/dashboard/client/workout/progress/${v.exerciseId}`}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
+              ...rowLinkStyle,
               paddingTop: i === 0 ? 0 : 8,
               marginTop: i === 0 ? 0 : 8,
               borderTop: i === 0 ? "none" : "1px solid var(--line)",
               fontSize: 13,
             }}
           >
-            <span>{v.name}</span>
+            <span style={{ color: "var(--moss-deep)" }}>{v.name}</span>
             <span style={{ fontWeight: 700 }}>
               {Math.round(v.total * 10) / 10} {v.suffix} total
             </span>
-          </div>
+          </a>
         ))}
       </div>
     </div>
