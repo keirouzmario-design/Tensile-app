@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_LABELS = {
+  1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun",
+};
 
 const RECOMMENDATION_LABELS = {
   increase: "↑ Increasing weight",
@@ -128,7 +130,7 @@ export default async function WeeklyReportPage({ params }) {
                 border: "1px solid var(--line)",
               }}
             >
-              {DAYS[d]} {loggedDays.has(d) ? "✓" : ""}
+              {DAY_LABELS[d]} {loggedDays.has(d) ? "✓" : ""}
             </div>
           ))}
         </div>
