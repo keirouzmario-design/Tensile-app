@@ -6,12 +6,15 @@ import LogErrorBoundary from "./error-boundary";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
   const today = new Date().toISOString().split("T")[0];
   return packageEndDate >= today ? "active" : "expired";
+}
+
+function formatDayLabel(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 }
 
 const CORE_MUSCLES = {
@@ -54,8 +57,9 @@ function overlapsAny(items, targetSet) {
 }
 
 export default async function LogDayPage({ searchParams }) {
-  const dayIndex = parseInt(searchParams?.day, 10);
-  if (isNaN(dayIndex) || dayIndex < 0 || dayIndex > 6) {
+  const dateStr = searchParams?.date;
+  const isValidDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+  if (!isValidDate) {
     redirect("/dashboard/client/workout");
   }
 
@@ -80,7 +84,8 @@ export default async function LogDayPage({ searchParams }) {
   const { data: plan } = await supabase
     .from("workout_plan_exercises")
     .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress, video_url, instructions)")
-    .eq("client_id", user.id);
+    .eq("client_id", user.id)
+    .eq("session_date", dateStr);
 
   const { data: injuries } = await supabase
     .from("client_injuries")
@@ -184,9 +189,7 @@ export default async function LogDayPage({ searchParams }) {
     (plan || []).map((r) => r.exercises?.id).filter(Boolean)
   );
 
-  const dayRows = (plan || [])
-    .filter((r) => r.day_of_week === dayIndex)
-    .sort((a, b) => a.order_index - b.order_index);
+  const dayRows = (plan || []).sort((a, b) => a.order_index - b.order_index);
 
   const resolvedRows = [];
   for (const row of dayRows) {
@@ -243,7 +246,7 @@ export default async function LogDayPage({ searchParams }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, marginBottom: 4 }}>Log {DAYS[dayIndex]}&apos;s Workout</h2>
+      <h2 style={{ fontSize: 18, marginBottom: 4 }}>Log {formatDayLabel(dateStr)}&apos;s Workout</h2>
       <p className="muted" style={{ marginBottom: 16 }}>
         Enter what you actually did for each set.
       </p>
@@ -258,7 +261,7 @@ export default async function LogDayPage({ searchParams }) {
             items={items}
             clientId={user.id}
             coachId={link.coach_id}
-            dayOfWeek={dayIndex}
+            sessionDate={dateStr}
           />
         </LogErrorBoundary>
       )}
