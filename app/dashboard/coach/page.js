@@ -67,6 +67,7 @@ export default async function CoachDashboard() {
   const weekStart = startOfWeek();
   const weekStartStr = toDateStr(weekStart);
   const weekEndStr = toDateStr(addDays(weekStart, 6));
+  const todayStr = toDateStr(new Date());
 
   // Scheduled sessions this week (distinct dates per client)
   const { data: scheduledRows } = await supabase
@@ -98,14 +99,13 @@ export default async function CoachDashboard() {
     loggedDatesByClient[row.client_id].add(row.session_date);
   }
 
-  // Flagged items this week, per client
+  // Flagged items TODAY ONLY, per client — clears itself automatically each new day
   const { data: flaggedRows } = await supabase
     .from("workout_adjustments")
     .select("client_id")
     .eq("coach_id", user.id)
     .eq("flagged", true)
-    .gte("session_date", weekStartStr)
-    .lte("session_date", weekEndStr);
+    .eq("session_date", todayStr);
 
   const flaggedCountByClient = {};
   for (const row of flaggedRows || []) {
@@ -144,7 +144,7 @@ export default async function CoachDashboard() {
         </p>
         {totalFlagged > 0 && (
           <p style={{ fontSize: 13, fontWeight: 700, color: "var(--rust)", marginBottom: 20 }}>
-            {totalFlagged} flagged item{totalFlagged !== 1 ? "s" : ""} need your attention
+            {totalFlagged} flagged item{totalFlagged !== 1 ? "s" : ""} from today need your attention
           </p>
         )}
         {totalFlagged === 0 && <div style={{ marginBottom: 20 }} />}
@@ -208,93 +208,3 @@ export default async function CoachDashboard() {
                               padding: "3px 8px",
                               borderRadius: 999,
                               background: l.logged >= l.scheduled ? "var(--moss-deep)" : "var(--card)",
-                              color: l.logged >= l.scheduled ? "var(--card)" : "var(--steel)",
-                              border: "1px solid var(--line)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {l.logged}/{l.scheduled} logged
-                          </div>
-                        )}
-                        {l.flagged > 0 && (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              background: "var(--rust)",
-                              color: "var(--card)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {l.flagged} flagged
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {l.profiles?.injuries && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        fontSize: 12,
-                        color: "var(--amber)",
-                        background: "#F3E9DC",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                      }}
-                    >
-                      Injury note: {l.profiles.injuries}
-                    </div>
-                  )}
-
-                  {pendingRequest && (
-                    <div
-                      style={{
-                        marginTop: 10,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 10,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ fontSize: 12, color: "var(--steel)" }}>
-                        Requested: {pendingRequest.days_per_week} days/wk,{" "}
-                        {pendingRequest.chat_frequency} chat — ${pendingRequest.price}
-                      </div>
-                      <ConfirmPackageButton
-                        coachId={user.id}
-                        clientId={l.client_id}
-                        daysPerWeek={pendingRequest.days_per_week}
-                        hasExistingPlan={hasExistingPlan}
-                      />
-                    </div>
-                  )}
-
-                  <a
-                    href={`/dashboard/coach/client/${l.client_id}`}
-                    style={{
-                      display: "inline-block",
-                      marginTop: 10,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--moss-deep)",
-                      textDecoration: "none",
-                    }}
-                  >
-                    View workout plan →
-                  </a>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="empty-state">No clients have signed up yet.</div>
-        )}
-      </div>
-    </div>
-  );
-}
