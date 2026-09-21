@@ -2,12 +2,32 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ExerciseItem from "./exercise-item";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
   const today = new Date().toISOString().split("T")[0];
   return packageEndDate >= today ? "active" : "expired";
+}
+
+function getWeekStart(dateStr) {
+  const d = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // shift back to Monday
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  return monday.toISOString().split("T")[0];
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDayLabel(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${weekday} · ${monthDay}`;
 }
 
 const CORE_MUSCLES = {
@@ -51,7 +71,7 @@ function overlapsAny(items, targetSet) {
   return false;
 }
 
-export default async function ClientWorkoutView() {
+export default async function ClientWorkoutView({ searchParams }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -75,10 +95,18 @@ export default async function ClientWorkoutView() {
     );
   }
 
+  const weekStart = getWeekStart(searchParams?.week);
+  const weekEnd = addDays(weekStart, 6);
+  const prevWeek = addDays(weekStart, -7);
+  const nextWeek = addDays(weekStart, 7);
+
   const { data: plan } = await supabase
     .from("workout_plan_exercises")
     .select("*, exercises(id, name, muscle_groups, equipment_type, joint_stress, gif_url, instructions, video_url)")
-    .eq("client_id", user.id);
+    .eq("client_id", user.id)
+    .gte("session_date", weekStart)
+    .lte("session_date", weekEnd)
+    .order("session_date", { ascending: true });
 
   const { data: injuries } = await supabase
     .from("client_injuries")
@@ -189,6 +217,16 @@ export default async function ClientWorkoutView() {
     (plan || []).map((r) => r.exercises?.id).filter(Boolean)
   );
 
+  // Group rows by their actual session_date (not day_of_week)
+  const byDate = {};
+  for (const row of plan || []) {
+    if (!row.session_date) continue;
+    if (!byDate[row.session_date]) byDate[row.session_date] = [];
+    byDate[row.session_date].push(row);
+  }
+
+  const datesInWeek = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
   return (
     <div>
       <div
@@ -207,13 +245,43 @@ export default async function ClientWorkoutView() {
           View progress →
         </a>
       </div>
-      {DAYS.map((label, idx) => {
-        const rows = (plan || [])
-          .filter((r) => r.day_of_week === idx)
-          .sort((a, b) => a.order_index - b.order_index);
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <a
+          href={`/dashboard/client/workout?week=${prevWeek}`}
+          style={{ fontSize: 13, fontWeight: 700, color: "var(--moss-deep)" }}
+        >
+          ← Prev week
+        </a>
+        <div className="muted" style={{ fontSize: 13, fontWeight: 700 }}>
+          {formatDayLabel(weekStart)} – {formatDayLabel(weekEnd)}
+        </div>
+        <a
+          href={`/dashboard/client/workout?week=${nextWeek}`}
+          style={{ fontSize: 13, fontWeight: 700, color: "var(--moss-deep)" }}
+        >
+          Next week →
+        </a>
+      </div>
+
+      {datesInWeek.every((d) => !byDate[d]) && (
+        <div className="empty-state">
+          No workouts scheduled for this week.
+        </div>
+      )}
+
+      {datesInWeek.map((dateStr) => {
+        const rows = (byDate[dateStr] || []).slice().sort((a, b) => a.order_index - b.order_index);
         if (rows.length === 0) return null;
         return (
-          <div key={idx} style={{ marginBottom: 16 }}>
+          <div key={dateStr} style={{ marginBottom: 16 }}>
             <div
               style={{
                 display: "flex",
@@ -223,10 +291,10 @@ export default async function ClientWorkoutView() {
               }}
             >
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--steel)" }}>
-                {label.toUpperCase()}
+                {formatDayLabel(dateStr)}
               </div>
               <a
-                href={`/dashboard/client/workout/log?day=${idx}`}
+                href={`/dashboard/client/workout/log?date=${dateStr}`}
                 style={{ fontSize: 12, fontWeight: 700, color: "var(--moss-deep)" }}
               >
                 Log this day →
