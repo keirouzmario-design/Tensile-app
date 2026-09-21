@@ -10,12 +10,14 @@ function parseWeightValue(weightStr) {
 
 function startOfWeek() {
   const now = new Date();
-  const day = now.getDay();
+  const day = now.getDay(); // 0=Sun..6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // shift back to Monday
   const start = new Date(now);
-  start.setDate(now.getDate() - day);
+  start.setDate(now.getDate() + diff);
   start.setHours(0, 0, 0, 0);
   return start;
 }
+
 
 export default async function ProgressPage() {
   const supabase = createClient();
