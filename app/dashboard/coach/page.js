@@ -208,3 +208,93 @@ export default async function CoachDashboard() {
                               padding: "3px 8px",
                               borderRadius: 999,
                               background: l.logged >= l.scheduled ? "var(--moss-deep)" : "var(--card)",
+                              color: l.logged >= l.scheduled ? "var(--card)" : "var(--steel)",
+                              border: "1px solid var(--line)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {l.logged}/{l.scheduled} logged
+                          </div>
+                        )}
+                        {l.flagged > 0 && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: "3px 8px",
+                              borderRadius: 999,
+                              background: "var(--rust)",
+                              color: "var(--card)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {l.flagged} flagged today
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {l.profiles?.injuries && (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "var(--amber)",
+                        background: "#F3E9DC",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                      }}
+                    >
+                      Injury note: {l.profiles.injuries}
+                    </div>
+                  )}
+
+                  {pendingRequest && (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 10,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "var(--steel)" }}>
+                        Requested: {pendingRequest.days_per_week} days/wk,{" "}
+                        {pendingRequest.chat_frequency} chat — ${pendingRequest.price}
+                      </div>
+                      <ConfirmPackageButton
+                        coachId={user.id}
+                        clientId={l.client_id}
+                        daysPerWeek={pendingRequest.days_per_week}
+                        hasExistingPlan={hasExistingPlan}
+                      />
+                    </div>
+                  )}
+
+                  <a
+                    href={`/dashboard/coach/client/${l.client_id}`}
+                    style={{
+                      display: "inline-block",
+                      marginTop: 10,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--moss-deep)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    View workout plan →
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-state">No clients have signed up yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}
