@@ -33,6 +33,10 @@ export default function WorkoutEditor({
   const [savingId, setSavingId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateMessage, setGenerateMessage] = useState("");
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+  const [libraryName, setLibraryName] = useState("");
+  const [showLibraryPrompt, setShowLibraryPrompt] = useState(false);
+  const [libraryMessage, setLibraryMessage] = useState("");
 
   const activeWeek = initialWeeks.find((w) => w.id === activeWeekId);
 
@@ -113,6 +117,62 @@ export default function WorkoutEditor({
     } else {
       setGenerateMessage("Calendar generated — client can now see this program.");
     }
+  }
+
+  async function saveDayToLibrary() {
+    if (!libraryName.trim()) {
+      setLibraryMessage("Please enter a name for this saved session.");
+      return;
+    }
+    if (dayRows.length === 0) {
+      setLibraryMessage("This day has no exercises to save yet.");
+      return;
+    }
+
+    setSavingToLibrary(true);
+    setLibraryMessage("");
+
+    const { data: librarySession, error: sessionError } = await supabase
+      .from("library_sessions")
+      .insert({
+        coach_id: coachId,
+        name: libraryName.trim(),
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      setSavingToLibrary(false);
+      setLibraryMessage(`Error: ${sessionError.message}`);
+      return;
+    }
+
+    const exerciseRows = dayRows.map((row) => ({
+      library_session_id: librarySession.id,
+      exercise_id: row.exercise_id,
+      sets: row.sets,
+      reps_target: row.reps_target,
+      weight: row.weight,
+      target_rpe: row.target_rpe,
+      target_percentage: row.target_percentage,
+      rest_seconds: row.rest_seconds,
+      order_index: row.order_index,
+    }));
+
+    const { error: exercisesError } = await supabase
+      .from("library_session_exercises")
+      .insert(exerciseRows);
+
+    setSavingToLibrary(false);
+
+    if (exercisesError) {
+      setLibraryMessage(`Error: ${exercisesError.message}`);
+      return;
+    }
+
+    setLibraryMessage(`Saved "${libraryName.trim()}" to your Library.`);
+    setLibraryName("");
+    setShowLibraryPrompt(false);
   }
 
   function swapCandidates(currentExercise) {
@@ -206,6 +266,83 @@ export default function WorkoutEditor({
           </button>
         ))}
       </div>
+
+      {dayRows.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {!showLibraryPrompt ? (
+            <button
+              onClick={() => {
+                setShowLibraryPrompt(true);
+                setLibraryMessage("");
+              }}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--moss-deep)",
+                background: "none",
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+                padding: "6px 12px",
+                cursor: "pointer",
+              }}
+            >
+              Save this day to Library
+            </button>
+          ) : (
+            <div className="card" style={{ padding: 12 }}>
+              <label style={{ fontSize: 11, color: "var(--steel)" }}>
+                Name this saved session
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Push Day"
+                value={libraryName}
+                onChange={(e) => setLibraryName(e.target.value)}
+                style={{ ...smallInputStyle, marginTop: 4, marginBottom: 8 }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={saveDayToLibrary}
+                  disabled={savingToLibrary}
+                  style={{
+                    border: "none",
+                    background: "var(--ink)",
+                    color: "var(--card)",
+                    borderRadius: 6,
+                    padding: "8px 14px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: savingToLibrary ? "default" : "pointer",
+                  }}
+                >
+                  {savingToLibrary ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLibraryPrompt(false);
+                    setLibraryMessage("");
+                  }}
+                  style={{
+                    border: "1px solid var(--line)",
+                    background: "var(--card)",
+                    color: "var(--ink)",
+                    borderRadius: 6,
+                    padding: "8px 14px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              {libraryMessage && (
+                <div style={{ fontSize: 12, marginTop: 8 }}>{libraryMessage}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {dayRows.length === 0 && (
         <div className="empty-state" style={{ marginBottom: 16 }}>
