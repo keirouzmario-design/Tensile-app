@@ -37,6 +37,10 @@ export default function WorkoutEditor({
   const [libraryName, setLibraryName] = useState("");
   const [showLibraryPrompt, setShowLibraryPrompt] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState("");
+  const [showLoadPrompt, setShowLoadPrompt] = useState(false);
+  const [librarySessions, setLibrarySessions] = useState(null);
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
+  const [loadMessage, setLoadMessage] = useState("");
 
   const activeWeek = initialWeeks.find((w) => w.id === activeWeekId);
 
@@ -175,6 +179,72 @@ export default function WorkoutEditor({
     setShowLibraryPrompt(false);
   }
 
+  async function openLoadPrompt() {
+    setShowLoadPrompt(true);
+    setLoadMessage("");
+    if (librarySessions === null) {
+      setLoadingLibrary(true);
+      const { data, error } = await supabase
+        .from("library_sessions")
+        .select("*, library_session_exercises(count)")
+        .eq("coach_id", coachId)
+        .order("created_at", { ascending: false });
+      setLoadingLibrary(false);
+      if (error) {
+        setLoadMessage(`Error: ${error.message}`);
+        return;
+      }
+      setLibrarySessions(data || []);
+    }
+  }
+
+  async function loadSessionIntoDay(librarySessionId) {
+    if (!activeWeekId) return;
+
+    setLoadingLibrary(true);
+    setLoadMessage("");
+
+    const { data: savedExercises, error } = await supabase
+      .from("library_session_exercises")
+      .select("*")
+      .eq("library_session_id", librarySessionId)
+      .order("order_index", { ascending: true });
+
+    if (error) {
+      setLoadingLibrary(false);
+      setLoadMessage(`Error: ${error.message}`);
+      return;
+    }
+
+    const startOrder = dayRows.length;
+    const newRows = (savedExercises || []).map((ex, idx) => ({
+      program_week_id: activeWeekId,
+      day_of_week: activeDay,
+      exercise_id: ex.exercise_id,
+      sets: ex.sets,
+      reps_target: ex.reps_target,
+      weight: ex.weight,
+      target_rpe: ex.target_rpe,
+      target_percentage: ex.target_percentage,
+      rest_seconds: ex.rest_seconds,
+      order_index: startOrder + idx,
+    }));
+
+    const { error: insertError } = await supabase
+      .from("program_exercises")
+      .insert(newRows);
+
+    setLoadingLibrary(false);
+
+    if (insertError) {
+      setLoadMessage(`Error: ${insertError.message}`);
+      return;
+    }
+
+    setShowLoadPrompt(false);
+    router.refresh();
+  }
+
   function swapCandidates(currentExercise) {
     const lockedMuscle = mainMuscle(currentExercise);
     return allExercises.filter((ex) => {
@@ -267,79 +337,155 @@ export default function WorkoutEditor({
         ))}
       </div>
 
-      {dayRows.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          {!showLibraryPrompt ? (
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {dayRows.length > 0 && !showLibraryPrompt && (
+          <button
+            onClick={() => {
+              setShowLibraryPrompt(true);
+              setLibraryMessage("");
+            }}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--moss-deep)",
+              background: "none",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            Save this day to Library
+          </button>
+        )}
+        {!showLoadPrompt && (
+          <button
+            onClick={openLoadPrompt}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--moss-deep)",
+              background: "none",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            Load from Library
+          </button>
+        )}
+      </div>
+
+      {showLibraryPrompt && (
+        <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+          <label style={{ fontSize: 11, color: "var(--steel)" }}>
+            Name this saved session
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Push Day"
+            value={libraryName}
+            onChange={(e) => setLibraryName(e.target.value)}
+            style={{ ...smallInputStyle, marginTop: 4, marginBottom: 8 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={saveDayToLibrary}
+              disabled={savingToLibrary}
+              style={{
+                border: "none",
+                background: "var(--ink)",
+                color: "var(--card)",
+                borderRadius: 6,
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: savingToLibrary ? "default" : "pointer",
+              }}
+            >
+              {savingToLibrary ? "Saving..." : "Save"}
+            </button>
             <button
               onClick={() => {
-                setShowLibraryPrompt(true);
+                setShowLibraryPrompt(false);
                 setLibraryMessage("");
               }}
               style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--moss-deep)",
-                background: "none",
                 border: "1px solid var(--line)",
+                background: "var(--card)",
+                color: "var(--ink)",
                 borderRadius: 6,
-                padding: "6px 12px",
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 700,
                 cursor: "pointer",
               }}
             >
-              Save this day to Library
+              Cancel
             </button>
-          ) : (
-            <div className="card" style={{ padding: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--steel)" }}>
-                Name this saved session
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Push Day"
-                value={libraryName}
-                onChange={(e) => setLibraryName(e.target.value)}
-                style={{ ...smallInputStyle, marginTop: 4, marginBottom: 8 }}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={saveDayToLibrary}
-                  disabled={savingToLibrary}
-                  style={{
-                    border: "none",
-                    background: "var(--ink)",
-                    color: "var(--card)",
-                    borderRadius: 6,
-                    padding: "8px 14px",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: savingToLibrary ? "default" : "pointer",
-                  }}
-                >
-                  {savingToLibrary ? "Saving..." : "Save"}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowLibraryPrompt(false);
-                    setLibraryMessage("");
-                  }}
-                  style={{
-                    border: "1px solid var(--line)",
-                    background: "var(--card)",
-                    color: "var(--ink)",
-                    borderRadius: 6,
-                    padding: "8px 14px",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-              {libraryMessage && (
-                <div style={{ fontSize: 12, marginTop: 8 }}>{libraryMessage}</div>
-              )}
+          </div>
+          {libraryMessage && (
+            <div style={{ fontSize: 12, marginTop: 8 }}>{libraryMessage}</div>
+          )}
+        </div>
+      )}
+
+      {showLoadPrompt && (
+        <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+            Pick a saved session to add to{" "}
+            {activeWeek ? `Week ${activeWeek.week_number}` : "this week"},{" "}
+            {DAYS.find((d) => d.value === activeDay)?.label}
+          </div>
+          {loadingLibrary && (
+            <div className="muted" style={{ fontSize: 13 }}>Loading...</div>
+          )}
+          {!loadingLibrary && librarySessions && librarySessions.length === 0 && (
+            <div className="muted" style={{ fontSize: 13 }}>
+              You haven't saved any sessions to your Library yet.
             </div>
+          )}
+          {!loadingLibrary &&
+            librarySessions &&
+            librarySessions.map((ls) => (
+              <div
+                key={ls.id}
+                onClick={() => loadSessionIntoDay(ls.id)}
+                style={{
+                  padding: "10px 4px",
+                  borderBottom: "1px solid var(--line)",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--moss-deep)" }}>{ls.name}</span>
+                <span className="muted" style={{ marginLeft: 6 }}>
+                  {ls.library_session_exercises?.[0]?.count || 0} exercises
+                </span>
+              </div>
+            ))}
+          <button
+            onClick={() => {
+              setShowLoadPrompt(false);
+              setLoadMessage("");
+            }}
+            style={{
+              marginTop: 10,
+              border: "1px solid var(--line)",
+              background: "var(--card)",
+              color: "var(--ink)",
+              borderRadius: 6,
+              padding: "8px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          {loadMessage && (
+            <div style={{ fontSize: 12, marginTop: 8 }}>{loadMessage}</div>
           )}
         </div>
       )}
