@@ -29,6 +29,25 @@ function toDateStr(d) {
   return d.toISOString().split("T")[0];
 }
 
+const BODY_PART_LABELS = {
+  chest: "Chest", back: "Back (muscle)", shoulders: "Shoulders", biceps: "Biceps",
+  triceps: "Triceps", forearms: "Forearms", lats: "Lats", traps: "Traps",
+  quads: "Quads", hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves",
+  core: "Core / abs", obliques: "Obliques", hip_flexors: "Hip flexors",
+  adductors: "Adductors (inner thigh)", abductors: "Abductors (outer hip)",
+  rotator_cuff: "Rotator cuff", neck: "Neck",
+  upper_back_spine: "Upper back / spine (joint)", lower_back_spine: "Lower back / spine (joint)",
+  shoulder_joint: "Shoulder joint", elbow: "Elbow", wrist: "Wrist",
+  hip: "Hip", knee: "Knee", ankle: "Ankle", foot: "Foot",
+  jaw_tmj: "Jaw / TMJ", ribs_sternum: "Ribs / sternum", collarbone: "Collarbone",
+  hand_fingers: "Hand / fingers", toes: "Toes", achilles_tendon: "Achilles tendon",
+  groin: "Groin", tailbone: "Tailbone", cardiovascular: "Heart / cardiovascular",
+  respiratory: "Breathing / respiratory", pregnancy: "Pregnancy",
+  general: "General illness / whole-body recovery",
+  neurological_balance: "Neurological / balance issues", digestive: "Digestive / GI",
+  diabetes_bloodsugar: "Diabetes / blood sugar",
+};
+
 export default async function CoachDashboard() {
   const supabase = createClient();
   const {
@@ -47,7 +66,7 @@ export default async function CoachDashboard() {
 
   const { data: links } = await supabase
     .from("coach_client_links")
-    .select("client_id, package_end_date, profiles:client_id (full_name, injuries)")
+    .select("client_id, package_end_date, profiles:client_id (full_name)")
     .eq("coach_id", user.id);
 
   const { data: pendingRequests } = await supabase
@@ -63,6 +82,20 @@ export default async function CoachDashboard() {
     .eq("coach_id", user.id);
 
   const clientsWithPlans = new Set((planRows || []).map((r) => r.client_id));
+
+  // Real active injuries — the same source that actually drives exercise
+  // swaps on the workout plan page, instead of the old free-text field
+  const { data: activeInjuries } = await supabase
+    .from("client_injuries")
+    .select("client_id, body_part, injury_type")
+    .eq("coach_id", user.id)
+    .eq("active", true);
+
+  const injuriesByClient = {};
+  for (const inj of activeInjuries || []) {
+    if (!injuriesByClient[inj.client_id]) injuriesByClient[inj.client_id] = [];
+    injuriesByClient[inj.client_id].push(inj);
+  }
 
   const weekStart = startOfWeek();
   const weekStartStr = toDateStr(weekStart);
@@ -161,6 +194,7 @@ export default async function CoachDashboard() {
                 (r) => r.client_id === l.client_id
               );
               const hasExistingPlan = clientsWithPlans.has(l.client_id);
+              const clientInjuries = injuriesByClient[l.client_id] || [];
 
               return (
                 <div
@@ -235,7 +269,7 @@ export default async function CoachDashboard() {
                     )}
                   </div>
 
-                  {l.profiles?.injuries && (
+                  {clientInjuries.length > 0 && (
                     <div
                       style={{
                         marginTop: 8,
@@ -246,7 +280,11 @@ export default async function CoachDashboard() {
                         padding: "6px 10px",
                       }}
                     >
-                      Injury note: {l.profiles.injuries}
+                      {clientInjuries.map((inj, idx) => (
+                        <div key={idx}>
+                          Injury: {BODY_PART_LABELS[inj.body_part] || inj.body_part} — {inj.injury_type}
+                        </div>
+                      ))}
                     </div>
                   )}
 
