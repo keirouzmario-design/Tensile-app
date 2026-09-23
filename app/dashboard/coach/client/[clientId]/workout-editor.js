@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { saveProgramToLibrary } from "@/lib/supabase/save-program-to-library";
 
 const DAYS = [
   { label: "Mon", value: 1 },
@@ -41,6 +42,16 @@ export default function WorkoutEditor({
   const [librarySessions, setLibrarySessions] = useState(null);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [loadMessage, setLoadMessage] = useState("");
+
+  // Program-level (multi-week) Library state
+  const [showProgramLibraryPrompt, setShowProgramLibraryPrompt] = useState(false);
+  const [programLibraryName, setProgramLibraryName] = useState("");
+  const [savingProgramToLibrary, setSavingProgramToLibrary] = useState(false);
+  const [programLibraryMessage, setProgramLibraryMessage] = useState("");
+  const [showLoadProgramPrompt, setShowLoadProgramPrompt] = useState(false);
+  const [libraryPrograms, setLibraryPrograms] = useState(null);
+  const [loadingProgramLibrary, setLoadingProgramLibrary] = useState(false);
+  const [loadProgramMessage, setLoadProgramMessage] = useState("");
 
   const activeWeek = initialWeeks.find((w) => w.id === activeWeekId);
 
@@ -245,6 +256,143 @@ export default function WorkoutEditor({
     router.refresh();
   }
 
+  // Save the ENTIRE active program (all weeks, all days, all exercises) to the Library
+  async function saveWholeProgramToLibrary() {
+    if (!programLibraryName.trim()) {
+      setProgramLibraryMessage("Please enter a name for this saved program.");
+      return;
+    }
+
+    setSavingProgramToLibrary(true);
+    setProgramLibraryMessage("");
+
+    try {
+      await saveProgramToLibrary(program.id, programLibraryName.trim(), "");
+      setProgramLibraryMessage(`Saved "${programLibraryName.trim()}" to your Library.`);
+      setProgramLibraryName("");
+      setShowProgramLibraryPrompt(false);
+    } catch (err) {
+      setProgramLibraryMessage(`Error: ${err.message}`);
+    }
+
+    setSavingProgramToLibrary(false);
+  }
+
+  async function openLoadProgramPrompt() {
+    setShowLoadProgramPrompt(true);
+    setLoadProgramMessage("");
+    if (libraryPrograms === null) {
+      setLoadingProgramLibrary(true);
+      const { data, error } = await supabase
+        .from("library_programs")
+        .select("*, library_program_weeks(count)")
+        .eq("coach_id", coachId)
+        .order("created_at", { ascending: false });
+      setLoadingProgramLibrary(false);
+      if (error) {
+        setLoadProgramMessage(`Error: ${error.message}`);
+        return;
+      }
+      setLibraryPrograms(data || []);
+    }
+  }
+
+  // Copies every week + exercise from a saved library program into the
+  // currently active program. If the active program already has a week
+  // with that week number, exercises are added into it; otherwise a new
+  // week is created. Existing exercises are never deleted or overwritten.
+  async function loadProgramFromLibrary(libraryProgramId) {
+    setLoadingProgramLibrary(true);
+    setLoadProgramMessage("");
+
+    const { data: libWeeks, error: weeksError } = await supabase
+      .from("library_program_weeks")
+      .select("id, week_number")
+      .eq("library_program_id", libraryProgramId)
+      .order("week_number", { ascending: true });
+
+    if (weeksError) {
+      setLoadingProgramLibrary(false);
+      setLoadProgramMessage(`Error: ${weeksError.message}`);
+      return;
+    }
+
+    if (!libWeeks || libWeeks.length === 0) {
+      setLoadingProgramLibrary(false);
+      setLoadProgramMessage("That saved program has no weeks to load.");
+      return;
+    }
+
+    const libWeekIds = libWeeks.map((w) => w.id);
+    const { data: libExercises, error: exercisesError } = await supabase
+      .from("library_program_exercises")
+      .select("*")
+      .in("library_program_week_id", libWeekIds)
+      .order("order_index", { ascending: true });
+
+    if (exercisesError) {
+      setLoadingProgramLibrary(false);
+      setLoadProgramMessage(`Error: ${exercisesError.message}`);
+      return;
+    }
+
+    // Map each library week to a real program_weeks row, creating new
+    // weeks as needed if this client's program has fewer weeks already.
+    const weekIdMap = {};
+    for (const libWeek of libWeeks) {
+      let matchingWeek = initialWeeks.find((w) => w.week_number === libWeek.week_number);
+
+      if (!matchingWeek) {
+        const { data: newWeek, error: newWeekError } = await supabase
+          .from("program_weeks")
+          .insert({
+            program_id: program.id,
+            week_number: libWeek.week_number,
+          })
+          .select()
+          .single();
+
+        if (newWeekError) {
+          setLoadingProgramLibrary(false);
+          setLoadProgramMessage(`Error: ${newWeekError.message}`);
+          return;
+        }
+        matchingWeek = newWeek;
+      }
+
+      weekIdMap[libWeek.id] = matchingWeek.id;
+    }
+
+    const newRows = (libExercises || []).map((ex) => ({
+      program_week_id: weekIdMap[ex.library_program_week_id],
+      day_of_week: ex.day_of_week,
+      exercise_id: ex.exercise_id,
+      sets: ex.sets,
+      reps_target: ex.reps_target,
+      weight: ex.weight,
+      target_rpe: ex.target_rpe,
+      target_percentage: ex.target_percentage,
+      rest_seconds: ex.rest_seconds,
+      order_index: ex.order_index,
+    }));
+
+    if (newRows.length > 0) {
+      const { error: insertError } = await supabase
+        .from("program_exercises")
+        .insert(newRows);
+
+      if (insertError) {
+        setLoadingProgramLibrary(false);
+        setLoadProgramMessage(`Error: ${insertError.message}`);
+        return;
+      }
+    }
+
+    setLoadingProgramLibrary(false);
+    setShowLoadProgramPrompt(false);
+    router.refresh();
+  }
+
   function swapCandidates(currentExercise) {
     const lockedMuscle = mainMuscle(currentExercise);
     return allExercises.filter((ex) => {
@@ -294,6 +442,161 @@ export default function WorkoutEditor({
           Starts {program.start_date} · {program.duration_weeks} weeks
         </div>
       </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {!showProgramLibraryPrompt && (
+          <button
+            onClick={() => {
+              setShowProgramLibraryPrompt(true);
+              setProgramLibraryMessage("");
+            }}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--moss-deep)",
+              background: "none",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            Save whole program to Library
+          </button>
+        )}
+        {!showLoadProgramPrompt && (
+          <button
+            onClick={openLoadProgramPrompt}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--moss-deep)",
+              background: "none",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            Load program from Library
+          </button>
+        )}
+      </div>
+
+      {showProgramLibraryPrompt && (
+        <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+          <label style={{ fontSize: 11, color: "var(--steel)" }}>
+            Name this saved program
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. 12-Week Strength Block"
+            value={programLibraryName}
+            onChange={(e) => setProgramLibraryName(e.target.value)}
+            style={{ ...smallInputStyle, marginTop: 4, marginBottom: 8 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={saveWholeProgramToLibrary}
+              disabled={savingProgramToLibrary}
+              style={{
+                border: "none",
+                background: "var(--ink)",
+                color: "var(--card)",
+                borderRadius: 6,
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: savingProgramToLibrary ? "default" : "pointer",
+              }}
+            >
+              {savingProgramToLibrary ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={() => {
+                setShowProgramLibraryPrompt(false);
+                setProgramLibraryMessage("");
+              }}
+              style={{
+                border: "1px solid var(--line)",
+                background: "var(--card)",
+                color: "var(--ink)",
+                borderRadius: 6,
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+          {programLibraryMessage && (
+            <div style={{ fontSize: 12, marginTop: 8 }}>{programLibraryMessage}</div>
+          )}
+        </div>
+      )}
+
+      {showLoadProgramPrompt && (
+        <div className="card" style={{ padding: 12, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+            Pick a saved program to load into {program.name}
+          </div>
+          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            Matching weeks will be filled in; missing weeks will be added.
+            Nothing already in this program gets removed.
+          </div>
+          {loadingProgramLibrary && (
+            <div className="muted" style={{ fontSize: 13 }}>Loading...</div>
+          )}
+          {!loadingProgramLibrary && libraryPrograms && libraryPrograms.length === 0 && (
+            <div className="muted" style={{ fontSize: 13 }}>
+              You haven't saved any programs to your Library yet.
+            </div>
+          )}
+          {!loadingProgramLibrary &&
+            libraryPrograms &&
+            libraryPrograms.map((lp) => (
+              <div
+                key={lp.id}
+                onClick={() => loadProgramFromLibrary(lp.id)}
+                style={{
+                  padding: "10px 4px",
+                  borderBottom: "1px solid var(--line)",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--moss-deep)" }}>{lp.name}</span>
+                <span className="muted" style={{ marginLeft: 6 }}>
+                  {lp.library_program_weeks?.[0]?.count || 0} weeks
+                </span>
+              </div>
+            ))}
+          <button
+            onClick={() => {
+              setShowLoadProgramPrompt(false);
+              setLoadProgramMessage("");
+            }}
+            style={{
+              marginTop: 10,
+              border: "1px solid var(--line)",
+              background: "var(--card)",
+              color: "var(--ink)",
+              borderRadius: 6,
+              padding: "8px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          {loadProgramMessage && (
+            <div style={{ fontSize: 12, marginTop: 8 }}>{loadProgramMessage}</div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
         {initialWeeks.map((week) => (
