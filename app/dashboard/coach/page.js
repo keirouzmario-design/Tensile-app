@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/app/sign-out-button";
 import ConfirmPackageButton from "./confirm-package-button";
+import AccessCodeCard from "@/components/coach/AccessCodeCard";
 
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
@@ -181,6 +182,10 @@ export default async function CoachDashboard() {
           </p>
         )}
         {totalFlagged === 0 && <div style={{ marginBottom: 20 }} />}
+
+        <div style={{ marginBottom: 24 }}>
+          <AccessCodeCard />
+        </div>
 
         <div style={{ fontSize: 12, color: "var(--steel)", fontWeight: 600, marginBottom: 8 }}>
           YOUR CLIENTS
