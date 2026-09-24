@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -42,8 +42,13 @@ export default function ConfirmPackageButton({ coachId, clientId, daysPerWeek, h
   const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   async function handleConfirm() {
+    // Blocks an instant double-tap before React re-renders and disables the button —
+    // important here since this generates a full workout plan, not just one row
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
 
     const today = new Date();
@@ -100,6 +105,7 @@ export default function ConfirmPackageButton({ coachId, clientId, daysPerWeek, h
     }
 
     setLoading(false);
+    submittingRef.current = false;
     router.refresh();
   }
 
