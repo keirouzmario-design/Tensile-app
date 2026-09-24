@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ActivateButton({ coachId, clientId, days }) {
+export default function ActivateButton({ coachId, clientId, days, currentEndDate }) {
   const router = useRouter();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,15 @@ export default function ActivateButton({ coachId, clientId, days }) {
     submittingRef.current = true;
     setLoading(true);
 
-    const newEndDate = new Date();
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Extend from whichever is later: the client's current end date (if
+    // their package is still active), or today (if it already expired or
+    // was never set). This carries over unused days instead of losing them.
+    const baseDateStr =
+      currentEndDate && currentEndDate > todayStr ? currentEndDate : todayStr;
+
+    const newEndDate = new Date(baseDateStr);
     newEndDate.setDate(newEndDate.getDate() + days);
     const formatted = newEndDate.toISOString().split("T")[0];
 
