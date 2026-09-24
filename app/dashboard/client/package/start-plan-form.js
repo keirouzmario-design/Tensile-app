@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -16,11 +16,16 @@ export default function StartPlanForm({ coachId, clientId }) {
   const [days, setDays] = useState(3);
   const [chat, setChat] = useState("weekly");
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   const price = calcPrice(days, chat);
 
   async function handleSubmit() {
+    // Blocks an instant double-tap before React re-renders and disables the button
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
+
     await supabase.from("package_requests").insert({
       client_id: clientId,
       coach_id: coachId,
@@ -28,7 +33,9 @@ export default function StartPlanForm({ coachId, clientId }) {
       chat_frequency: chat,
       price,
     });
+
     setLoading(false);
+    submittingRef.current = false;
     router.refresh();
   }
 
