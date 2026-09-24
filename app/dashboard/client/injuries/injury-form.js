@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -108,6 +108,7 @@ export default function InjuryForm({ userId, coachId }) {
   const [injuryType, setInjuryType] = useState("");
   const [doctorRec, setDoctorRec] = useState(DOCTOR_RECS[0]);
   const [saving, setSaving] = useState(false);
+  const submittingRef = useRef(false);
 
   const selectedBodyPart = BODY_PARTS.find((b) => b.value === bodyPart);
   const injuryTypeOptions = selectedBodyPart ? INJURY_TYPES[selectedBodyPart.category] : [];
@@ -119,7 +120,11 @@ export default function InjuryForm({ userId, coachId }) {
 
   async function handleSubmit() {
     if (!bodyPart || !injuryType) return;
+    // Blocks an instant double-tap before React re-renders and disables the button
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
+
     const action = computeAction(selectedBodyPart.category, injuryType, doctorRec);
     await supabase.from("client_injuries").insert({
       client_id: userId,
@@ -130,7 +135,9 @@ export default function InjuryForm({ userId, coachId }) {
       resolved_action: action,
       active: true,
     });
+
     setSaving(false);
+    submittingRef.current = false;
     setBodyPart("");
     setInjuryType("");
     setDoctorRec(DOCTOR_RECS[0]);
