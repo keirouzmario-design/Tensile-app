@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { saveProgramToLibrary } from "@/lib/supabase/save-program-to-library";
@@ -53,6 +53,16 @@ export default function WorkoutEditor({
   const [loadingProgramLibrary, setLoadingProgramLibrary] = useState(false);
   const [loadProgramMessage, setLoadProgramMessage] = useState("");
 
+  // Double-tap guards — one per action that writes to the database.
+  // These block an instant second tap before React re-renders and
+  // disables the button, which a plain state flag alone doesn't catch.
+  const savingToLibraryRef = useRef(false);
+  const savingProgramToLibraryRef = useRef(false);
+  const generatingRef = useRef(false);
+  const loadingSessionIntoDayRef = useRef(false);
+  const loadingProgramFromLibraryRef = useRef(false);
+  const addingExerciseRef = useRef(false);
+
   const activeWeek = initialWeeks.find((w) => w.id === activeWeekId);
 
   const dayRows = initialProgramExercises
@@ -101,6 +111,9 @@ export default function WorkoutEditor({
 
   async function addExercise(exerciseId) {
     if (!activeWeekId) return;
+    if (addingExerciseRef.current) return;
+    addingExerciseRef.current = true;
+
     const nextOrder = dayRows.length;
     await supabase.from("program_exercises").insert({
       program_week_id: activeWeekId,
@@ -111,6 +124,8 @@ export default function WorkoutEditor({
       weight: "",
       order_index: nextOrder,
     });
+
+    addingExerciseRef.current = false;
     closePicker();
     router.refresh();
   }
@@ -121,12 +136,18 @@ export default function WorkoutEditor({
   }
 
   async function generateCalendar() {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
     setGenerating(true);
     setGenerateMessage("");
+
     const { error } = await supabase.rpc("generate_program_workouts", {
       p_program_id: program.id,
     });
+
     setGenerating(false);
+    generatingRef.current = false;
+
     if (error) {
       setGenerateMessage(`Error: ${error.message}`);
     } else {
@@ -143,6 +164,8 @@ export default function WorkoutEditor({
       setLibraryMessage("This day has no exercises to save yet.");
       return;
     }
+    if (savingToLibraryRef.current) return;
+    savingToLibraryRef.current = true;
 
     setSavingToLibrary(true);
     setLibraryMessage("");
@@ -158,6 +181,7 @@ export default function WorkoutEditor({
 
     if (sessionError) {
       setSavingToLibrary(false);
+      savingToLibraryRef.current = false;
       setLibraryMessage(`Error: ${sessionError.message}`);
       return;
     }
@@ -179,6 +203,7 @@ export default function WorkoutEditor({
       .insert(exerciseRows);
 
     setSavingToLibrary(false);
+    savingToLibraryRef.current = false;
 
     if (exercisesError) {
       setLibraryMessage(`Error: ${exercisesError.message}`);
@@ -211,6 +236,8 @@ export default function WorkoutEditor({
 
   async function loadSessionIntoDay(librarySessionId) {
     if (!activeWeekId) return;
+    if (loadingSessionIntoDayRef.current) return;
+    loadingSessionIntoDayRef.current = true;
 
     setLoadingLibrary(true);
     setLoadMessage("");
@@ -223,6 +250,7 @@ export default function WorkoutEditor({
 
     if (error) {
       setLoadingLibrary(false);
+      loadingSessionIntoDayRef.current = false;
       setLoadMessage(`Error: ${error.message}`);
       return;
     }
@@ -246,6 +274,7 @@ export default function WorkoutEditor({
       .insert(newRows);
 
     setLoadingLibrary(false);
+    loadingSessionIntoDayRef.current = false;
 
     if (insertError) {
       setLoadMessage(`Error: ${insertError.message}`);
@@ -262,6 +291,8 @@ export default function WorkoutEditor({
       setProgramLibraryMessage("Please enter a name for this saved program.");
       return;
     }
+    if (savingProgramToLibraryRef.current) return;
+    savingProgramToLibraryRef.current = true;
 
     setSavingProgramToLibrary(true);
     setProgramLibraryMessage("");
@@ -276,6 +307,7 @@ export default function WorkoutEditor({
     }
 
     setSavingProgramToLibrary(false);
+    savingProgramToLibraryRef.current = false;
   }
 
   async function openLoadProgramPrompt() {
@@ -302,6 +334,9 @@ export default function WorkoutEditor({
   // with that week number, exercises are added into it; otherwise a new
   // week is created. Existing exercises are never deleted or overwritten.
   async function loadProgramFromLibrary(libraryProgramId) {
+    if (loadingProgramFromLibraryRef.current) return;
+    loadingProgramFromLibraryRef.current = true;
+
     setLoadingProgramLibrary(true);
     setLoadProgramMessage("");
 
@@ -313,12 +348,14 @@ export default function WorkoutEditor({
 
     if (weeksError) {
       setLoadingProgramLibrary(false);
+      loadingProgramFromLibraryRef.current = false;
       setLoadProgramMessage(`Error: ${weeksError.message}`);
       return;
     }
 
     if (!libWeeks || libWeeks.length === 0) {
       setLoadingProgramLibrary(false);
+      loadingProgramFromLibraryRef.current = false;
       setLoadProgramMessage("That saved program has no weeks to load.");
       return;
     }
@@ -332,6 +369,7 @@ export default function WorkoutEditor({
 
     if (exercisesError) {
       setLoadingProgramLibrary(false);
+      loadingProgramFromLibraryRef.current = false;
       setLoadProgramMessage(`Error: ${exercisesError.message}`);
       return;
     }
@@ -354,6 +392,7 @@ export default function WorkoutEditor({
 
         if (newWeekError) {
           setLoadingProgramLibrary(false);
+          loadingProgramFromLibraryRef.current = false;
           setLoadProgramMessage(`Error: ${newWeekError.message}`);
           return;
         }
@@ -383,12 +422,14 @@ export default function WorkoutEditor({
 
       if (insertError) {
         setLoadingProgramLibrary(false);
+        loadingProgramFromLibraryRef.current = false;
         setLoadProgramMessage(`Error: ${insertError.message}`);
         return;
       }
     }
 
     setLoadingProgramLibrary(false);
+    loadingProgramFromLibraryRef.current = false;
     setShowLoadProgramPrompt(false);
     router.refresh();
   }
