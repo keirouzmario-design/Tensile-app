@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -8,8 +8,14 @@ export default function ActivateButton({ coachId, clientId, days }) {
   const router = useRouter();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   async function handleActivate() {
+    // Blocks an instant double-tap before React re-renders and disables the
+    // button — important here since a double-tap would silently add the
+    // days twice instead of creating an obvious duplicate row
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
 
     const newEndDate = new Date();
@@ -23,6 +29,7 @@ export default function ActivateButton({ coachId, clientId, days }) {
       .eq("client_id", clientId);
 
     setLoading(false);
+    submittingRef.current = false;
     router.refresh();
   }
 
@@ -38,7 +45,8 @@ export default function ActivateButton({ coachId, clientId, days }) {
         padding: "6px 12px",
         fontSize: 12,
         fontWeight: 700,
-        cursor: "pointer",
+        cursor: loading ? "default" : "pointer",
+        opacity: loading ? 0.6 : 1,
       }}
     >
       {loading ? "..." : `+${days} days`}
