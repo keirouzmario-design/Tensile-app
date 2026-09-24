@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "@/app/sign-out-button";
 import ConfirmPackageButton from "./confirm-package-button";
 import AccessCodeCard from "@/components/coach/AccessCodeCard";
+import RemoveClientButton from "@/components/coach/RemoveClientButton";
 
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
@@ -317,19 +318,34 @@ export default async function CoachDashboard() {
                     </div>
                   )}
 
-                  <a
-                    href={`/dashboard/coach/client/${l.client_id}`}
+                  <div
                     style={{
-                      display: "inline-block",
                       marginTop: 10,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--moss-deep)",
-                      textDecoration: "none",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 8,
                     }}
                   >
-                    View workout plan →
-                  </a>
+                    <a
+                      href={`/dashboard/coach/client/${l.client_id}`}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--moss-deep)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      View workout plan →
+                    </a>
+
+                    <RemoveClientButton
+                      coachId={user.id}
+                      clientId={l.client_id}
+                      clientName={l.profiles?.full_name}
+                    />
+                  </div>
                 </div>
               );
             })}
