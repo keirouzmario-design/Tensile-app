@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -13,6 +13,7 @@ export default function ProgramSetup({ clientId, coachId }) {
   const [startDate, setStartDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const submittingRef = useRef(false);
 
   const inputStyle = {
     width: "100%",
@@ -25,6 +26,10 @@ export default function ProgramSetup({ clientId, coachId }) {
   };
 
   async function createProgram() {
+    // Blocks an instant double-tap before React even has a chance to
+    // re-render and disable the button
+    if (submittingRef.current) return;
+
     if (!name.trim()) {
       setError("Give the program a name.");
       return;
@@ -39,6 +44,7 @@ export default function ProgramSetup({ clientId, coachId }) {
       return;
     }
 
+    submittingRef.current = true;
     setError("");
     setSaving(true);
 
@@ -59,6 +65,7 @@ export default function ProgramSetup({ clientId, coachId }) {
     if (programError) {
       setError(programError.message);
       setSaving(false);
+      submittingRef.current = false;
       return;
     }
 
@@ -74,10 +81,12 @@ export default function ProgramSetup({ clientId, coachId }) {
     if (weeksError) {
       setError(weeksError.message);
       setSaving(false);
+      submittingRef.current = false;
       return;
     }
 
     setSaving(false);
+    submittingRef.current = false;
     router.refresh();
   }
 
