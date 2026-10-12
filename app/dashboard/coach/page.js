@@ -4,6 +4,7 @@ import SignOutButton from "@/app/sign-out-button";
 import ConfirmPackageButton from "./confirm-package-button";
 import AccessCodeCard from "@/components/coach/AccessCodeCard";
 import RemoveClientButton from "@/components/coach/RemoveClientButton";
+import AdherenceRing from "@/components/coach/AdherenceRing";
 
 function getAccessStatus(packageEndDate) {
   if (!packageEndDate) return "pending";
@@ -239,39 +240,7 @@ export default async function CoachDashboard() {
                     </div>
 
                     {status === "active" && (
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {l.scheduled > 0 && (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              background: l.logged >= l.scheduled ? "var(--moss-deep)" : "var(--card)",
-                              color: l.logged >= l.scheduled ? "var(--card)" : "var(--steel)",
-                              border: "1px solid var(--line)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {l.logged}/{l.scheduled} logged
-                          </div>
-                        )}
-                        {l.flagged > 0 && (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              background: "var(--rust)",
-                              color: "var(--card)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {l.flagged} flagged today
-                          </div>
-                        )}
-                      </div>
+                      <AdherenceRing logged={l.logged} scheduled={l.scheduled} flagged={l.flagged} />
                     )}
                   </div>
 
