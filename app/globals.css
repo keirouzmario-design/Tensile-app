@@ -1,14 +1,15 @@
 :root {
-  --ink: #1e2119;
-  --paper: #ede9dd;
-  --card: #f7f5ee;
-  --moss: #5b6b45;
-  --moss-deep: #42502f;
-  --amber: #b97a34;
-  --rust: #8c4a3a;
-  --steel: #7c8577;
-  --line: #d9d3c1;
+  --ink: #15181D;
+  --paper: #E7E2D8;
+  --card: #FAF8F3;
+  --moss: #B5642B;
+  --moss-deep: #FF4620;
+  --amber: #B5642B;
+  --rust: #C8402A;
+  --steel: #565E67;
+  --line: #D7D1C4;
 }
+
 
 * {
   box-sizing: border-box;
