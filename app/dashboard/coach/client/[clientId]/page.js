@@ -127,7 +127,8 @@ export default async function ClientWorkoutPage({ params }) {
               marginBottom: 12,
               fontSize: 13,
               color: "var(--amber)",
-              background: "#F3E9DC",
+              background: "rgba(181, 100, 43, 0.16)",
+              border: "1px solid rgba(181, 100, 43, 0.3)",
               borderRadius: 8,
               padding: "10px 14px",
             }}
