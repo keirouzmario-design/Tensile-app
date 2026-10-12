@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Barlow+Condensed:wght@600;700&display=swap');
+
 :root {
   --ink: #E7E2D8;
   --paper: #15181D;
@@ -8,6 +10,8 @@
   --rust: #FF6B52;
   --steel: #9AA0A8;
   --line: #2A2F38;
+  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-data: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -20,6 +24,11 @@ body {
   background-attachment: fixed;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 a {
@@ -35,9 +44,17 @@ input {
 }
 
 .wordmark {
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 20px;
   letter-spacing: -0.02em;
+}
+
+.stat-number {
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .page {
@@ -86,6 +103,7 @@ input {
 
 .btn-primary {
   width: 100%;
+  font-family: var(--font-display);
   background: var(--moss-deep);
   color: #15181D;
   border: none;
