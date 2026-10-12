@@ -250,7 +250,8 @@ export default async function CoachDashboard() {
                         marginTop: 8,
                         fontSize: 12,
                         color: "var(--amber)",
-                        background: "#F3E9DC",
+                        background: "rgba(181, 100, 43, 0.16)",
+                        border: "1px solid rgba(181, 100, 43, 0.3)",
                         borderRadius: 6,
                         padding: "6px 10px",
                       }}
