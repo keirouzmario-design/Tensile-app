@@ -372,8 +372,8 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
                       padding: "6px 10px",
                       borderRadius: 6,
                       border: "1px solid var(--line)",
-                      background: infoOpen === "instructions" ? "var(--ink)" : "var(--card)",
-                      color: infoOpen === "instructions" ? "var(--card)" : "var(--ink)",
+                      background: infoOpen === "instructions" ? "var(--moss-deep)" : "var(--card)",
+                      color: infoOpen === "instructions" ? "#15181D" : "var(--ink)",
                     }}
                   >
                     Instructions
@@ -439,6 +439,8 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
                           border: "1px solid var(--line)",
                           borderRadius: 6,
                           fontSize: 13,
+                          background: "#22262E",
+                          color: "var(--ink)",
                         }}
                       />
                     </div>
@@ -454,6 +456,8 @@ export default function LogForm({ items, clientId, coachId, sessionDate }) {
                           border: "1px solid var(--line)",
                           borderRadius: 6,
                           fontSize: 13,
+                          background: "#22262E",
+                          color: "var(--ink)",
                         }}
                       />
                     </div>
