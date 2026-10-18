@@ -55,8 +55,8 @@ export default function StartPlanForm({ coachId, clientId }) {
               padding: "6px 12px",
               fontSize: 13,
               fontWeight: 600,
-              background: days === d ? "var(--ink)" : "var(--card)",
-              color: days === d ? "var(--card)" : "var(--ink)",
+              background: days === d ? "var(--moss-deep)" : "var(--card)",
+              color: days === d ? "#15181D" : "var(--ink)",
               cursor: "pointer",
             }}
           >
@@ -80,8 +80,8 @@ export default function StartPlanForm({ coachId, clientId }) {
               padding: "6px 12px",
               fontSize: 13,
               fontWeight: 600,
-              background: chat === opt.v ? "var(--ink)" : "var(--card)",
-              color: chat === opt.v ? "var(--card)" : "var(--ink)",
+              background: chat === opt.v ? "var(--moss-deep)" : "var(--card)",
+              color: chat === opt.v ? "#15181D" : "var(--ink)",
               cursor: "pointer",
             }}
           >
