@@ -468,6 +468,8 @@ export default function WorkoutEditor({
     border: "1px solid var(--line)",
     borderRadius: 6,
     fontSize: 13,
+    background: "#22262E",
+    color: "var(--ink)",
   };
 
   return (
@@ -542,8 +544,8 @@ export default function WorkoutEditor({
               disabled={savingProgramToLibrary}
               style={{
                 border: "none",
-                background: "var(--ink)",
-                color: "var(--card)",
+                background: "var(--moss-deep)",
+                color: "#15181D",
                 borderRadius: 6,
                 padding: "8px 14px",
                 fontSize: 13,
@@ -647,7 +649,7 @@ export default function WorkoutEditor({
             style={{
               border: "1px solid var(--line)",
               background: activeWeekId === week.id ? "var(--moss-deep)" : "var(--card)",
-              color: activeWeekId === week.id ? "var(--card)" : "var(--ink)",
+              color: activeWeekId === week.id ? "#15181D" : "var(--ink)",
               borderRadius: 6,
               padding: "6px 12px",
               fontSize: 13,
@@ -667,8 +669,8 @@ export default function WorkoutEditor({
             onClick={() => setActiveDay(day.value)}
             style={{
               border: "1px solid var(--line)",
-              background: activeDay === day.value ? "var(--ink)" : "var(--card)",
-              color: activeDay === day.value ? "var(--card)" : "var(--ink)",
+              background: activeDay === day.value ? "var(--moss-deep)" : "var(--card)",
+              color: activeDay === day.value ? "#15181D" : "var(--ink)",
               borderRadius: 6,
               padding: "6px 12px",
               fontSize: 13,
@@ -739,8 +741,8 @@ export default function WorkoutEditor({
               disabled={savingToLibrary}
               style={{
                 border: "none",
-                background: "var(--ink)",
-                color: "var(--card)",
+                background: "var(--moss-deep)",
+                color: "#15181D",
                 borderRadius: 6,
                 padding: "8px 14px",
                 fontSize: 13,
@@ -894,6 +896,8 @@ export default function WorkoutEditor({
                     borderRadius: 6,
                     fontSize: 13,
                     marginBottom: 8,
+                    background: "#22262E",
+                    color: "var(--ink)",
                   }}
                 />
                 <div style={{ maxHeight: 180, overflowY: "auto" }}>
@@ -1063,6 +1067,8 @@ export default function WorkoutEditor({
             borderRadius: 6,
             fontSize: 13,
             marginBottom: 8,
+            background: "#22262E",
+            color: "var(--ink)",
           }}
         />
         {pickerFor === "add" && (
@@ -1106,8 +1112,8 @@ export default function WorkoutEditor({
           disabled={generating}
           style={{
             border: "none",
-            background: "var(--ink)",
-            color: "var(--card)",
+            background: "var(--moss-deep)",
+            color: "#15181D",
             borderRadius: 6,
             padding: "10px 16px",
             fontSize: 13,
